@@ -96,6 +96,11 @@ Live session user: `aero` (no password).
 3. After 30–90 minutes, open the finished run and download **frutiger-os-iso** under *Artifacts*
    (a zip containing the ISO and its checksum). If it fails, download **build-log** and send it over.
 
+**Version numbers:** every successful GitHub build gets the next number automatically: 1.1, 1.2 … 1.9,
+then 2.0, 2.1 and so on. The number is in the ISO's file name, the installer, the About text and
+`/etc/frutiger-release`, and each build is tagged in the repository (`v1.1`, `v1.2`, …). Local
+builds use `FRUTIGER_VERSION=1.4 sudo -E ./build.sh` (default 1.0).
+
 ### Try the theme without building an ISO
 
 On an existing Debian/Ubuntu Xfce install:

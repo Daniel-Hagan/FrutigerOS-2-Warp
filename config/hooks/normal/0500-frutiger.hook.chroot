@@ -84,8 +84,9 @@ gtk-sound-theme-name=Frutiger
 CONF
 
 # Branding (keeps ID=debian so apt and Debian tooling still work)
-sed -i 's/^PRETTY_NAME=.*/PRETTY_NAME="Frutiger OS 1.0 (Lagoon)"/' /usr/lib/os-release
-echo "Frutiger OS 1.0 \"Lagoon\" (based on Debian 12)" > /etc/frutiger-release
+FV=$(cat /etc/frutiger-version 2>/dev/null || echo 1.0)
+sed -i "s/^PRETTY_NAME=.*/PRETTY_NAME=\"Frutiger OS $FV (Lagoon)\"/" /usr/lib/os-release
+echo "Frutiger OS $FV \"Lagoon\" (based on Debian 12)" > /etc/frutiger-release
 
 chmod 755 /usr/bin/frutiger-*
 
