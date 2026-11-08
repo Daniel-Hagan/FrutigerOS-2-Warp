@@ -18,6 +18,7 @@ cp -a config "$WORK/"
 echo "$VERSION" > "$WORK/config/includes.chroot/etc/frutiger-version"
 sed -i -e "s/^\(    version: *\).*/\1\"$VERSION\"/" -e "s/^\(    shortVersion: *\).*/\1\"$VERSION\"/" \
        -e "s/Frutiger OS 1\.0/Frutiger OS $VERSION/g" "$WORK/config/includes.chroot/etc/calamares/branding/frutiger/branding.desc"
+sed -i "s/@VERSION@/Frutiger OS $VERSION  ·  Lagoon/" "$WORK/config/includes.chroot/usr/share/grub/themes/frutiger/theme.txt"
 cd "$WORK"
 
 lb config \

@@ -235,3 +235,38 @@ XfdesktopIconView.view:selected { background-image: linear-gradient(to bottom, a
   border-color: #7fb4e3; background-image: linear-gradient(to bottom, #fafdff, #d8ecfc 50%, #c4e1fa 51%, #dcefff);
 }
 .path-bar button:checked, #ThunarLocationButtons button:checked { font-weight: bold; background-image: none; }
+
+/* ===== Login screen (LightDM GTK greeter): a frosted-glass card on the Aero backdrop ===== */
+#login_window, #restart_dialog, #shutdown_dialog {
+  border-radius: 16px;
+  padding: 22px 26px;
+  border: 1px solid alpha(white, .65);
+  background-color: alpha(#06305e, .55);
+  background-image: linear-gradient(to bottom, alpha(white, .32) 0%, alpha(white, .10) 34%, alpha(white, .02) 36%, alpha(white, .10) 100%);
+  box-shadow: 0 16px 48px alpha(#000814, .55), inset 0 0 0 1px alpha(white, .25);
+  color: white;
+}
+#login_window label, #restart_dialog label, #shutdown_dialog label { color: white; text-shadow: 0 1px 3px alpha(black, .6); }
+#login_window entry {
+  border-radius: 8px; padding: 6px 10px; color: #10223a;
+  border: 1px solid alpha(white, .8); background-color: alpha(white, .94);
+  box-shadow: inset 0 1px 3px alpha(black, .2);
+}
+#login_window entry:focus { border-color: #9fe2ff; box-shadow: 0 0 0 3px alpha(#7fd0ff, .45); }
+#login_window button, #restart_dialog button, #shutdown_dialog button {
+  border-radius: 8px; color: white; text-shadow: 0 1px 1px alpha(black, .45); border: 1px solid alpha(#002244, .6);
+  background-image: linear-gradient(to bottom, #9fdcff 0%, #4aaef0 48%, #1f86d8 50%, #5cc4ff 100%);
+  box-shadow: inset 0 1px alpha(white, .7);
+}
+#login_window button:hover { background-image: linear-gradient(to bottom, #c4ecff 0%, #66c0ff 48%, #2a98ec 50%, #7fd8ff 100%); box-shadow: 0 0 12px alpha(#7fd8ff, .8); }
+#login_window combobox button { background-image: none; border-color: transparent; box-shadow: none; }
+#user_image { border-radius: 12px; padding: 4px; border: 2px solid alpha(white, .85); background-color: alpha(white, .25);
+  box-shadow: 0 6px 18px alpha(black, .45); }
+#panel_window {
+  border-bottom: 1px solid alpha(white, .45);
+  background-color: alpha(#06305e, .45);
+  background-image: linear-gradient(to bottom, alpha(white, .35), alpha(white, .08) 50%, alpha(white, .0) 52%, alpha(white, .08));
+  color: white;
+}
+#panel_window label, #panel_window menubar > menuitem, #panel_window menubar > menuitem label { color: white; text-shadow: 0 1px 2px alpha(black, .6); }
+#panel_window menubar > menuitem:hover { background-image: linear-gradient(to bottom, alpha(white, .4), alpha(white, .1)); border-radius: 4px; }
