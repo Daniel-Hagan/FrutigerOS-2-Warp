@@ -1,6 +1,5 @@
 # Builds the Frutiger OS ISO on GitHub's servers (free for public repositories).
-# Run it from the repository's Actions tab ("Build Frutiger OS ISO" → Run workflow),
-# or push a tag like v1.0. The finished ISO appears under the run's "Artifacts".
+# Unpacks frutiger-os-1.0-kit.tar.gz from the repository, then builds it.
 name: Build Frutiger OS ISO
 on:
   workflow_dispatch:
@@ -12,11 +11,16 @@ jobs:
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
+      - name: Unpack the kit
+        run: |
+          tar xzf frutiger-os-1.0-kit.tar.gz
+          ls frutiger-os
       - name: Make room on the runner
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h /
       - name: Build inside Debian 12
+        working-directory: frutiger-os
         run: |
           chmod +x build.sh config/hooks/normal/* config/includes.chroot/usr/bin/* || true
           docker run --rm --privileged -v "$PWD":/src -w /src debian:bookworm bash -c '
@@ -25,17 +29,18 @@ jobs:
             apt-get install -y live-build ca-certificates curl python3 xz-utils
             ./build.sh'
       - name: Checksum
+        working-directory: frutiger-os
         run: sha256sum frutiger-os-*.iso | tee SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
           name: frutiger-os-iso
           path: |
-            frutiger-os-*.iso
-            SHA256SUMS
+            frutiger-os/frutiger-os-*.iso
+            frutiger-os/SHA256SUMS
           compression-level: 0
           retention-days: 14
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: build-log
-          path: build.log
+          path: frutiger-os/build.log
