@@ -1,0 +1,432 @@
+#!/usr/bin/env python3
+"""Frutiger OS — Orbit Launcher.
+
+A taskbar replacement: a glossy orb sits in the bottom-left corner. Click it and
+your pinned apps fan out on an inner arc and your open windows on an outer arc,
+as glass bubbles. Click a bubble to launch / switch; middle-click a window
+bubble to close it. Right-click a window bubble to pin its app; right-click a
+pinned bubble to unpin it. Esc or a click elsewhere folds the ring back up.
+
+Pins:   ~/.config/frutiger/orbit-pins   (one .desktop id per line)
+Needs:  python3-gi, gir1.2-gtk-3.0, gir1.2-wnck-3.0, a compositor (picom/xfwm4).
+"""
+import math, os, subprocess, time
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+gi.require_version("Wnck", "3.0")
+from gi.repository import Gtk, Gdk, GdkPixbuf, Gio, GLib, Wnck
+import cairo
+
+ORB_IMG = "/usr/share/frutiger/start-orb.png"
+PIN_FILE = os.path.expanduser("~/.config/frutiger/orbit-pins")
+DEFAULT_PINS = ["thunar.desktop", "firefox-esr.desktop", "xfce4-terminal.desktop",
+                "org.xfce.mousepad.desktop", "frutiger-personalize.desktop"]
+ORB = 72            # orb diameter
+MARGIN = 14         # distance from screen corner
+R1, R2 = 170, 265   # pin arc, window arc radii
+BUB, WBUB = 48, 56  # bubble diameters
+SPAN = 380          # expanded window size (square)
+
+
+def accent():
+    try:
+        with open(os.path.expanduser("~/.config/frutiger/accent")) as f:
+            h = f.read().strip().lstrip("#")
+        return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    except Exception:
+        return (0x2a / 255, 0xa7 / 255, 0xe8 / 255)
+
+
+def load_pins():
+    try:
+        with open(PIN_FILE) as f:
+            ids = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+    except FileNotFoundError:
+        ids = DEFAULT_PINS
+    apps = []
+    for i in ids:
+        try:
+            info = Gio.DesktopAppInfo.new(i)
+        except TypeError:
+            info = None
+        if info:
+            apps.append(info)
+    return apps
+
+
+def save_pins(ids):
+    os.makedirs(os.path.dirname(PIN_FILE), exist_ok=True)
+    with open(PIN_FILE, "w") as f:
+        f.write("\n".join(ids) + "\n")
+
+
+def app_for_window(w):
+    """Best guess at the .desktop entry behind a window (WM_CLASS matching)."""
+    names = [n for n in (w.get_class_instance_name(), w.get_class_group_name()) if n]
+    for n in names:
+        for cand in (n + ".desktop", n.lower() + ".desktop"):
+            try:
+                info = Gio.DesktopAppInfo.new(cand)
+            except TypeError:
+                info = None
+            if info:
+                return info
+    lowered = {n.lower() for n in names}
+    for info in Gio.AppInfo.get_all():
+        wm = (info.get_startup_wm_class() or "").lower() if isinstance(info, Gio.DesktopAppInfo) else ""
+        if wm and wm in lowered:
+            return info
+    for n in names:
+        for group in Gio.DesktopAppInfo.search(n):
+            for did in group:
+                info = Gio.DesktopAppInfo.new(did)
+                if info:
+                    return info
+    return None
+
+
+class Orbit(Gtk.Window):
+    def __init__(self):
+        super().__init__(type=Gtk.WindowType.TOPLEVEL)
+        self.set_title("Frutiger Orbit")
+        self.set_decorated(False)
+        self.set_keep_above(True)
+        self.set_skip_taskbar_hint(True)
+        self.set_skip_pager_hint(True)
+        self.set_type_hint(Gdk.WindowTypeHint.DOCK)
+        self.stick()
+        self.set_app_paintable(True)
+        vis = self.get_screen().get_rgba_visual()
+        if vis:
+            self.set_visual(vis)
+        self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.POINTER_MOTION_MASK |
+                        Gdk.EventMask.LEAVE_NOTIFY_MASK | Gdk.EventMask.KEY_PRESS_MASK)
+        self.connect("draw", self.on_draw)
+        self.connect("button-press-event", self.on_press)
+        self.connect("motion-notify-event", self.on_motion)
+        self.connect("leave-notify-event", lambda *a: self.set_hover(None))
+        self.connect("key-press-event", self.on_key)
+        self.connect("focus-out-event", lambda *a: self.collapse())
+
+        self.orb = GdkPixbuf.Pixbuf.new_from_file_at_size(ORB_IMG, ORB, ORB)
+        self.icon_theme = Gtk.IconTheme.get_default()
+        self.screen = Wnck.Screen.get_default()
+        self.screen.connect("window-opened", lambda *a: self.refresh())
+        self.screen.connect("window-closed", self.on_window_closed)
+        self.app_cache = {}   # xid -> DesktopAppInfo (or None): which app a window belongs to
+        self.icon_cache = {}  # (key, size) -> Pixbuf
+        self.icon_theme.connect("changed", self.on_theme_changed)
+        self.screen.connect("active-window-changed", self.on_active_changed)
+        self.pins, self.wins = [], []
+        self.open = False
+        self.t = 0.0          # 0 = folded, 1 = fully fanned out
+        self.items = []       # [(kind, obj, x, y, r)]
+        self.hover = None
+        self.anim = None
+        self.place(collapsed=True)
+        self.show_all()
+
+    # ---------- geometry ----------
+    def place(self, collapsed):
+        geo = Gdk.Display.get_default().get_primary_monitor() or Gdk.Display.get_default().get_monitor(0)
+        g = geo.get_workarea()
+        size = ORB + MARGIN * 2 + 24 if collapsed else SPAN
+        self.size = size
+        self.resize(size, size)
+        self.move(g.x, g.y + g.height - size)
+        self.cx, self.cy = MARGIN + ORB / 2, size - MARGIN - ORB / 2
+
+    def refresh(self):
+        """Re-read pins and open windows (on expand and when windows come/go)."""
+        self.screen.force_update()
+        self.pins = load_pins()
+        self.wins = [w for w in self.screen.get_windows()
+                     if not w.is_skip_tasklist() and w.get_name() != "Frutiger Orbit"]
+        self.queue_draw()
+
+    def on_window_closed(self, _screen, w):
+        self.app_cache.pop(w.get_xid(), None)
+        self.refresh()
+
+    def on_theme_changed(self, *_):
+        self.icon_cache.clear()
+        self.queue_draw()
+
+    def app_of(self, w):
+        """Cached window -> .desktop app match."""
+        xid = w.get_xid()
+        if xid not in self.app_cache:
+            self.app_cache[xid] = app_for_window(w)
+        return self.app_cache[xid]
+
+    def themed_icon(self, app, size):
+        """The app's icon from the current icon theme (same lookup as pinned bubbles)."""
+        gicon = app.get_icon() if app else None
+        if not gicon:
+            return None
+        key = (gicon.to_string(), size)
+        if key not in self.icon_cache:
+            pix = None
+            info = self.icon_theme.lookup_by_gicon(gicon, size, Gtk.IconLookupFlags.FORCE_SIZE)
+            if info:
+                try:
+                    pix = info.load_icon()
+                except GLib.Error:
+                    pix = None
+            self.icon_cache[key] = pix
+        return self.icon_cache[key]
+
+    def on_active_changed(self, screen, _prev):
+        w = screen.get_active_window()
+        if self.open and w is not None and w.get_name() != "Frutiger Orbit":
+            self.collapse()
+
+    def layout(self):
+        pins, wins = self.pins, self.wins
+        scale = min(1.0, (SPAN - MARGIN - ORB / 2 - WBUB / 2 - 4) / R2)
+        items = []
+        for group, radius, kind, d in ((pins + ["__all__"], R1 * scale, "pin", BUB), (wins, R2 * scale, "win", WBUB)):
+            n = len(group)
+            for i, obj in enumerate(group):
+                a = math.radians(45 if n == 1 else 6 + 78 * i / (n - 1))
+                k = self.ease(self.t)
+                x = self.cx + math.sin(a) * radius * k
+                y = self.cy - math.cos(a) * radius * k
+                items.append(("all" if obj == "__all__" else kind, obj, x, y, d / 2))
+        self.items = items
+
+    @staticmethod
+    def ease(t):  # gentle overshoot, like a bubble settling
+        return 1 + 2.2 * (t - 1) ** 3 + 1.2 * (t - 1) ** 2 if t < 1 else 1
+
+    # ---------- drawing ----------
+    def on_draw(self, _w, cr):
+        cr.set_operator(cairo.OPERATOR_SOURCE)
+        cr.set_source_rgba(0, 0, 0, 0)
+        cr.paint()
+        cr.set_operator(cairo.OPERATOR_OVER)
+        ar, ag, ab = accent()
+        if self.t > 0:
+            self.layout()
+            # faint orbit tracks
+            for r in (R1, R2):
+                rr = r * min(1.0, (SPAN - MARGIN - ORB / 2 - WBUB / 2 - 4) / R2) * self.ease(self.t)
+                cr.set_line_width(26)
+                cr.set_source_rgba(0.75, 0.92, 1, 0.16 * self.t)
+                cr.arc(self.cx, self.cy, rr, -math.pi / 2 - 0.05, 0.05)
+                cr.stroke()
+            for kind, obj, x, y, r in self.items:
+                hov = self.hover is not None and self.hover[1] is obj
+                self.draw_bubble(cr, x, y, r * (1.18 if hov else 1), kind, obj, (ar, ag, ab))
+            if self.hover:
+                self.draw_label(cr, *self.hover)
+        # the orb
+        glow = 0.9 if self.open else 0.0
+        if glow:
+            g = cairo.RadialGradient(self.cx, self.cy, ORB / 2, self.cx, self.cy, ORB / 2 + 16)
+            g.add_color_stop_rgba(0, 0.47, 0.86, 1, glow)
+            g.add_color_stop_rgba(1, 0.47, 0.86, 1, 0)
+            cr.set_source(g)
+            cr.arc(self.cx, self.cy, ORB / 2 + 16, 0, 2 * math.pi)
+            cr.fill()
+        Gdk.cairo_set_source_pixbuf(cr, self.orb, self.cx - ORB / 2, self.cy - ORB / 2)
+        cr.paint()
+        n = len(self.wins) if self.t > 0 else self.count_windows()
+        if n:
+            bx, by = self.cx + ORB * 0.36, self.cy - ORB * 0.36
+            cr.set_source_rgba(0.88, 0.19, 0.06, 1)
+            cr.arc(bx, by, 10, 0, 2 * math.pi)
+            cr.fill_preserve()
+            cr.set_source_rgba(1, 1, 1, 1)
+            cr.set_line_width(1.5)
+            cr.stroke()
+            cr.select_font_face("Noto Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD)
+            cr.set_font_size(11)
+            ext = cr.text_extents(str(n))
+            cr.move_to(bx - ext.width / 2 - ext.x_bearing, by + ext.height / 2)
+            cr.show_text(str(n))
+        return False
+
+    def count_windows(self):
+        return len([w for w in self.screen.get_windows()
+                    if not w.is_skip_tasklist() and w.get_name() != "Frutiger Orbit"])
+
+    def draw_bubble(self, cr, x, y, r, kind, obj, tint):
+        alpha = self.t
+        # body: clear glass with a coloured rim
+        g = cairo.RadialGradient(x - r * .35, y - r * .45, r * .05, x, y, r)
+        g.add_color_stop_rgba(0, 1, 1, 1, .95 * alpha)
+        g.add_color_stop_rgba(.25, 1, 1, 1, .35 * alpha)
+        g.add_color_stop_rgba(.7, *tint, .18 * alpha)
+        g.add_color_stop_rgba(1, 1, 1, 1, .65 * alpha)
+        cr.set_source(g)
+        cr.arc(x, y, r, 0, 2 * math.pi)
+        cr.fill_preserve()
+        cr.set_source_rgba(1, 1, 1, .85 * alpha)
+        cr.set_line_width(1.2)
+        cr.stroke()
+        if kind == "win" and isinstance(obj, Wnck.Window) and obj.is_active():
+            cr.set_source_rgba(.6, .9, 1, .9 * alpha)
+            cr.set_line_width(3)
+            cr.arc(x, y, r + 2, 0, 2 * math.pi)
+            cr.stroke()
+        # icon
+        size = int(r * 1.15)
+        pix = None
+        if kind == "pin":
+            pix = self.themed_icon(obj, size)
+        elif kind == "win":
+            # Same themed icon as the app's pinned bubble, so a running app looks
+            # identical to its pin; fall back to the window's own icon (e.g. Wine games).
+            pix = self.themed_icon(self.app_of(obj), size) or obj.get_icon()
+        if pix:
+            if pix.get_width() != size:
+                pix = pix.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
+            cr.save()
+            Gdk.cairo_set_source_pixbuf(cr, pix, x - size / 2, y - size / 2)
+            cr.paint_with_alpha(alpha * (.55 if kind == "win" and obj.is_minimized() else 1))
+            cr.restore()
+        elif kind == "all":  # 2x2 dots = "All programs"
+            cr.set_source_rgba(.16, .56, .85, alpha)
+            for dx in (-1, 1):
+                for dy in (-1, 1):
+                    cr.arc(x + dx * r * .3, y + dy * r * .3, r * .16, 0, 2 * math.pi)
+                    cr.fill()
+
+    def draw_label(self, cr, kind, obj, x, y, r):
+        text = {"pin": lambda: obj.get_display_name(), "win": lambda: obj.get_name(),
+                "all": lambda: "All programs"}[kind]()
+        text = text if len(text) < 28 else text[:26] + "…"
+        if kind == "pin":
+            text += "  ·  right-click: unpin"
+        elif kind == "win":
+            text += "  ·  right-click: pin"
+        cr.select_font_face("Noto Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        cr.set_font_size(12)
+        e = cr.text_extents(text)
+        w, h = e.width + 18, 22
+        lx = min(max(4, x - w / 2), self.size - w - 4)
+        ly = y - r - h - 8 if y - r - h - 8 > 0 else y + r + 6
+        cr.set_source_rgba(.04, .16, .28, .75)
+        self.rounded(cr, lx, ly, w, h, 11)
+        cr.fill_preserve()
+        cr.set_source_rgba(1, 1, 1, .55)
+        cr.set_line_width(1)
+        cr.stroke()
+        cr.set_source_rgba(1, 1, 1, 1)
+        cr.move_to(lx + 9 - e.x_bearing, ly + h / 2 + e.height / 2)
+        cr.show_text(text)
+
+    @staticmethod
+    def rounded(cr, x, y, w, h, r):
+        cr.new_sub_path()
+        cr.arc(x + w - r, y + r, r, -math.pi / 2, 0)
+        cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
+        cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
+        cr.arc(x + r, y + r, r, math.pi, 1.5 * math.pi)
+        cr.close_path()
+
+    # ---------- interaction ----------
+    def hit(self, x, y):
+        for kind, obj, ix, iy, r in reversed(self.items):
+            if (x - ix) ** 2 + (y - iy) ** 2 <= (r + 3) ** 2:
+                return (kind, obj, ix, iy, r)
+        return None
+
+    def on_orb(self, x, y):
+        return (x - self.cx) ** 2 + (y - self.cy) ** 2 <= (ORB / 2) ** 2
+
+    def set_hover(self, h):
+        if (h and h[1]) is not (self.hover and self.hover[1]):
+            self.hover = h
+            self.queue_draw()
+
+    def on_motion(self, _w, ev):
+        if self.open and self.t >= 1:
+            self.set_hover(self.hit(ev.x, ev.y))
+
+    def on_key(self, _w, ev):
+        if ev.keyval == Gdk.KEY_Escape:
+            self.collapse()
+
+    def on_press(self, _w, ev):
+        if self.on_orb(ev.x, ev.y):
+            if ev.button == 3:
+                subprocess.Popen(["frutiger-personalize"])
+            else:
+                self.collapse() if self.open else self.expand()
+            return True
+        if not self.open:
+            return False
+        h = self.hit(ev.x, ev.y)
+        if not h:
+            self.collapse()
+            return True
+        kind, obj = h[0], h[1]
+        ts = ev.time or Gtk.get_current_event_time()
+        if ev.button == 3:  # pin / unpin, ring stays open
+            ids = [a.get_id() for a in self.pins]
+            if kind == "pin":
+                ids = [i for i in ids if i != obj.get_id()]
+            elif kind == "win":
+                app = self.app_of(obj)
+                if app and app.get_id() not in ids:
+                    ids.append(app.get_id())
+            save_pins(ids)
+            self.hover = None
+            self.refresh()
+            return True
+        if kind == "pin":
+            obj.launch([], None)
+        elif kind == "all":
+            subprocess.Popen(["xfce4-popup-whiskermenu"])
+        elif kind == "win":
+            if ev.button == 2:
+                obj.close(ts)
+                GLib.timeout_add(250, lambda: self.queue_draw() and False)
+                return True
+            if obj.is_minimized():
+                obj.unminimize(ts)
+            obj.activate(ts)
+        self.collapse()
+        return True
+
+    def expand(self):
+        self.refresh()
+        self.open = True
+        self.place(collapsed=False)
+        self.present()
+        self.animate(1)
+
+    def collapse(self):
+        if not self.open:
+            return
+        self.open = False
+        self.hover = None
+        self.animate(0, done=lambda: self.place(collapsed=True))
+
+    def animate(self, target, done=None):
+        if self.anim:
+            GLib.source_remove(self.anim)
+        start, t0, dur = self.t, time.monotonic(), 0.28
+
+        def step():
+            p = min(1, (time.monotonic() - t0) / dur)
+            self.t = start + (target - start) * p
+            self.queue_draw()
+            if p >= 1:
+                self.anim = None
+                if done:
+                    done()
+                    self.queue_draw()
+                return False
+            return True
+        self.anim = GLib.timeout_add(16, step)
+
+
+if __name__ == "__main__":
+    GLib.set_prgname("frutiger-orbit")
+    os.makedirs(os.path.dirname(PIN_FILE), exist_ok=True)
+    Orbit().connect("destroy", Gtk.main_quit)
+    Gtk.main()

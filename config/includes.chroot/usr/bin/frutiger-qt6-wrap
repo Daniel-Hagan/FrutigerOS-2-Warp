@@ -1,0 +1,16 @@
+#!/bin/sh
+# Give Qt 6 apps the Aero look. Qt 5 apps get it from QT_QPA_PLATFORMTHEME=qt5ct
+# (set at login); Qt 6 apps need qt6ct instead, so we copy each Qt 6 app's
+# launcher into /usr/local/share/applications (which takes priority) with the
+# variable set. Runs at build time and after every apt install.
+OUT=/usr/local/share/applications
+mkdir -p "$OUT"
+for f in /usr/share/applications/*.desktop; do
+  exe=$(sed -n 's/^Exec=\([^ ]*\).*/\1/p' "$f" | head -n1)
+  [ -n "$exe" ] && [ "$exe" != env ] || continue
+  path=$(command -v "$exe" 2>/dev/null) || continue
+  if ldd "$path" 2>/dev/null | grep -q 'libQt6Core'; then
+    sed 's|^Exec=|Exec=env QT_QPA_PLATFORMTHEME=qt6ct |' "$f" > "$OUT/$(basename "$f")"
+  fi
+done
+exit 0

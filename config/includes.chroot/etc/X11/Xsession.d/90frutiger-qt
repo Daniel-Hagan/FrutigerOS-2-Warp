@@ -1,0 +1,4 @@
+# Frutiger OS: Qt 5 apps (VLC, KDE apps, ...) follow the Aero look via qt5ct.
+# Qt 6 apps can use qt6ct: run them with QT_QPA_PLATFORMTHEME=qt6ct
+# frutiger-qt6-wrap does this automatically for every installed Qt 6 app.
+export QT_QPA_PLATFORMTHEME=qt5ct

@@ -1,0 +1,10 @@
+[net/launchpad/plank/docks/dock1]
+theme='Frutiger-Bubble'
+position='bottom'
+alignment='center'
+icon-size=48
+zoom-enabled=true
+zoom-percent=150
+hide-mode='window-dodge'
+show-dock-item=false
+dock-items=['applications.dockitem', 'thunar.dockitem', 'firefox-esr.dockitem', 'xfce4-terminal.dockitem', 'mousepad.dockitem', 'personalize.dockitem', 'clock.dockitem', 'trash.dockitem']

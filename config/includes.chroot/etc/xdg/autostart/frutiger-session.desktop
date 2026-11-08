@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Frutiger session setup
+Exec=frutiger-session
+OnlyShowIn=XFCE;
+NoDisplay=true
+X-XFCE-Autostart-Override=true

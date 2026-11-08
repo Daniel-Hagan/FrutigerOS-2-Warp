@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""Frutiger OS — Aquarium Rail taskbar.
+
+A strip of water along the bottom of the screen. Every app is a koi:
+running apps swim (drifting and turning), pinned apps that aren't running
+rest near the sand. The active window's fish glows; a fish wanting
+attention pulses. Click a fish to open/focus/minimize, middle-click to close,
+right-click to pin/unpin. The orb on the left opens the Start menu.
+"""
+import math, random, sys
+sys.path.insert(0, "/usr/lib/frutiger")
+from frutiger_strip import Strip, run, cairo
+
+# (body, belly) colours — each app gets a stable koi pattern
+KOI = [((1, .55, .15), (1, 1, 1)), ((1, .82, .2), (1, .95, .7)), ((.9, .2, .15), (1, 1, 1)),
+       ((.25, .6, 1), (.85, .95, 1)), ((.97, .97, .97), (1, .45, .25)), ((.35, .35, .42), (1, .65, .25))]
+
+
+class Aquarium(Strip):
+    TITLE = "Frutiger Aquarium"
+    PRGNAME = "frutiger-aquarium"
+    STRIP_H = 62
+    EXTRA_H = 44
+    item_radius = 26
+
+    def __init__(self):
+        rnd = random.Random(7)
+        self.bubbles = [(rnd.random(), rnd.random(), .3 + rnd.random() * .7) for _ in range(18)]
+        super().__init__()
+
+    def surface(self, cr, w, top, t):
+        cr.move_to(0, top + 4)
+        for x in range(0, w + 20, 20):
+            cr.line_to(x, top + 4 + math.sin(x / 60 + t * 1.4) * 2.5)
+
+    def draw_background(self, cr, w, h, top, t):
+        H = self.STRIP_H
+        g = cairo.LinearGradient(0, top, 0, top + H)
+        g.add_color_stop_rgba(0, .75, .95, 1, .55)
+        g.add_color_stop_rgba(.15, .35, .78, .95, .55)
+        g.add_color_stop_rgba(1, .03, .32, .55, .78)
+        self.surface(cr, w, top, t)
+        cr.line_to(w, top + H)
+        cr.line_to(0, top + H)
+        cr.close_path()
+        cr.set_source(g)
+        cr.fill()
+        self.surface(cr, w, top, t)
+        cr.set_source_rgba(1, 1, 1, .8)
+        cr.set_line_width(1.5)
+        cr.stroke()
+        for i in range(6):                                   # drifting light caustics
+            cx = (i / 6 * w + t * 12 * (1 + i % 3)) % (w + 200) - 100
+            gr = cairo.RadialGradient(cx, top + H * .6, 0, cx, top + H * .6, 90)
+            gr.add_color_stop_rgba(0, 1, 1, 1, .10)
+            gr.add_color_stop_rgba(1, 1, 1, 1, 0)
+            cr.set_source(gr)
+            cr.rectangle(cx - 90, top + 6, 180, H - 6)
+            cr.fill()
+        cr.set_source_rgba(.95, .88, .65, .35)               # sand
+        cr.rectangle(0, top + H - 6, w, 6)
+        cr.fill()
+        cr.set_line_width(1)
+        for x0, phase, sp in self.bubbles:                   # rising bubbles
+            y = top + H - ((t * sp * 14 + phase * H) % (H - 6))
+            x = x0 * w + math.sin(t * 2 + phase * 9) * 3
+            cr.set_source_rgba(1, 1, 1, .55)
+            cr.arc(x, y, 1.5 + sp * 2.5, 0, 2 * math.pi)
+            cr.stroke()
+
+    def item_pos(self, i, n, it, w, top, t):
+        x0, x1 = 100, w - 130
+        step = min(96, (x1 - x0) / max(1, n))
+        bx = x0 + step * (i + .5)
+        self.k = max(.55, min(1, step / 80))                 # shrink fish when the rail is crowded
+        if it.running:
+            drift = math.sin(t * .5 + it.seed * 6.28) * min(18, step * .25)
+            return bx + drift, top + self.STRIP_H * .5 + math.sin(t * 1.3 + it.seed * 9) * 3
+        return bx, top + self.STRIP_H - 20                  # resting near the sand
+
+    def draw_item(self, cr, it, x, y, t, hover):
+        body, belly = KOI[int(it.seed * 1000) % len(KOI)]
+        facing = 1 if (not it.running or math.cos(t * .5 + it.seed * 6.28) >= 0) else -1
+        a = 1.0 if it.running else .6
+        L, Hh = 30, 17
+        k = getattr(self, "k", 1)
+        cr.save()
+        cr.translate(x, y)
+        cr.scale(facing * k, k)
+        wag = math.sin(t * (6 if it.running else 2) + it.seed * 5) * 4
+        cr.move_to(-L + 6, 0)                                 # tail
+        cr.line_to(-L - 12, -11 + wag)
+        cr.curve_to(-L - 6, 0, -L - 6, 0, -L - 12, 11 + wag)
+        cr.close_path()
+        cr.set_source_rgba(*body, .85 * a)
+        cr.fill()
+        cr.move_to(-8, -Hh + 2)                               # dorsal fin
+        cr.curve_to(-2, -Hh - 9, 8, -Hh - 6, 10, -Hh + 3)
+        cr.close_path()
+        cr.set_source_rgba(*body, .8 * a)
+        cr.fill()
+        cr.save()                                             # body
+        cr.scale(1, Hh / L)
+        cr.arc(0, 0, L, 0, 2 * math.pi)
+        cr.restore()
+        g = cairo.LinearGradient(0, -Hh, 0, Hh)
+        g.add_color_stop_rgba(0, *body, a)
+        g.add_color_stop_rgba(.65, *body, a)
+        g.add_color_stop_rgba(1, *belly, a)
+        cr.set_source(g)
+        cr.fill_preserve()
+        cr.set_source_rgba(1, 1, 1, .85 * a)
+        cr.set_line_width(1.2)
+        cr.stroke()
+        cr.save()                                             # gloss
+        cr.translate(2, -Hh * .45)
+        cr.scale(1, .35)
+        cr.arc(0, 0, L * .7, 0, 2 * math.pi)
+        cr.restore()
+        gl = cairo.LinearGradient(0, -Hh, 0, 0)
+        gl.add_color_stop_rgba(0, 1, 1, 1, .75 * a)
+        gl.add_color_stop_rgba(1, 1, 1, 1, 0)
+        cr.set_source(gl)
+        cr.fill()
+        cr.set_source_rgba(1, 1, 1, a)                        # eye
+        cr.arc(L - 9, -4, 3.2, 0, 2 * math.pi)
+        cr.fill()
+        cr.set_source_rgba(.05, .1, .2, a)
+        cr.arc(L - 8.4, -4, 1.7, 0, 2 * math.pi)
+        cr.fill()
+        cr.restore()
+        if it.active or it.attention:                         # glow ring
+            pulse = .6 + .4 * math.sin(t * 4) if it.attention else 1
+            cr.save()
+            cr.translate(x, y)
+            cr.scale(k, Hh / L * k)
+            cr.arc(0, 0, L + 4, 0, 2 * math.pi)
+            cr.restore()
+            cr.set_source_rgba(.6, .92, 1, .9 * pulse)
+            cr.set_line_width(2.5)
+            cr.stroke()
+        self.paint_icon(cr, it, x + 3 * facing * k, y, int(24 * k), a)  # icon is never mirrored
+        for k in range(min(len(it.windows), 4) if len(it.windows) > 1 else 0):
+            cr.set_source_rgba(1, 1, 1, .9)                   # one dot per extra window
+            cr.arc(x - (min(len(it.windows), 4) - 1) * 4 + k * 8, y + Hh + 6, 2, 0, 2 * math.pi)
+            cr.fill()
+
+
+if __name__ == "__main__":
+    run(Aquarium)

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Welcome Center
+Comment=A quick tour and the first things to set up
+Exec=frutiger-welcome
+Icon=frutiger-os
+Categories=Settings;XFCE;

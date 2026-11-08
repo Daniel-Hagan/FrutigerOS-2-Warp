@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<!-- Frutiger OS wallpaper generator: open with #<scene>, screenshot at 2560x1440.
+     Scenes: lagoon-dawn lagoon-day lagoon-sunset lagoon-night aquarium orbs aurora meadow koi bubbles -->
+<style>
+html,body{margin:0;width:100vw;height:100vh;overflow:hidden}
+#s{position:absolute;inset:0}
+.rays{position:absolute;inset:-60%;mix-blend-mode:screen}
+svg.land{position:absolute;left:0;bottom:0;width:100%;height:42%}
+.b{position:absolute;border-radius:50%;background:radial-gradient(circle at 30% 28%,rgba(255,255,255,.95) 0 8%,rgba(255,255,255,.25) 18%,rgba(140,220,255,.12) 55%,rgba(255,255,255,.55) 72%,rgba(255,255,255,0) 74%)}
+.star{position:absolute;border-radius:50%;background:#fff}
+</style></head><body><div id="s"></div>
+<script>
+const S = document.getElementById("s"), name = location.hash.slice(1) || "lagoon-day";
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const add = html => S.insertAdjacentHTML("beforeend", html);
+function bubbles(n, y0, y1, min, max, op = 1) { for (let i = 0; i < n; i++) { const s = min + rnd() * (max - min);
+  add(`<div class="b" style="width:${s}vmin;height:${s}vmin;left:${rnd() * 100}%;top:${y0 + rnd() * (y1 - y0)}%;opacity:${(.4 + rnd() * .6) * op}"></div>`); } }
+function rays(x, y, a = .16, reach = 55) { x = (x + 60) / 2.2; y = (y + 60) / 2.2;   // viewport % -> % of the oversized .rays box
+  add(`<div class="rays" style="background:repeating-conic-gradient(from 0deg at ${x}% ${y}%,rgba(255,255,255,${a}) 0deg 5deg,rgba(255,255,255,0) 5deg 14deg);
+  -webkit-mask:radial-gradient(circle at ${x}% ${y}%,#000 0%,transparent ${reach}%)"></div>`); }
+function sun(x, y, size) {   // a glowing sun disc with a soft corona
+  add(`<div style="position:absolute;left:${x}%;top:${y}%;width:${size * 4}vmin;height:${size * 4}vmin;margin:-${size * 2}vmin;border-radius:50%;
+    background:radial-gradient(circle,rgba(255,252,220,.75) 0%,rgba(255,240,170,.35) 22%,rgba(255,235,160,0) 60%)"></div>
+  <div style="position:absolute;left:${x}%;top:${y}%;width:${size}vmin;height:${size}vmin;margin:-${size / 2}vmin;border-radius:50%;
+    background:radial-gradient(circle at 42% 38%,#ffffff 0%,#fffbe0 35%,#ffef9a 70%,#ffd95a 100%);
+    box-shadow:0 0 3vmin 1vmin rgba(255,250,210,.9),0 0 9vmin 3vmin rgba(255,236,150,.6)"></div>`); }
+function stars(n) { for (let i = 0; i < n; i++) { const s = .5 + rnd() * 2.2; add(`<div class="star" style="width:${s}px;height:${s}px;left:${rnd() * 100}%;top:${rnd() * 58}%;opacity:${.3 + rnd() * .7};box-shadow:0 0 ${s * 3}px #fff"></div>`); } }
+function lagoonLand(h1a, h1b, h2a, h2b, wa, wb, glint = .7) {
+  add(`<svg class="land" viewBox="0 0 1000 400" preserveAspectRatio="none"><defs>
+  <linearGradient id="h1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${h1a}"/><stop offset="1" stop-color="${h1b}"/></linearGradient>
+  <linearGradient id="h2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${h2a}"/><stop offset="1" stop-color="${h2b}"/></linearGradient>
+  <linearGradient id="wt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${wa}"/><stop offset="1" stop-color="${wb}"/></linearGradient></defs>
+  <path d="M0 190 C180 120 330 150 470 190 S800 120 1000 160 V400 H0Z" fill="url(#h1)" opacity=".85"/>
+  <path d="M0 330 C150 330 220 300 330 300 S520 340 1000 330 V400 H0Z" fill="url(#wt)"/>
+  <path d="M0 260 C200 210 380 250 560 280 S850 230 1000 250 V310 C800 300 600 330 400 310 S100 300 0 320Z" fill="url(#h2)"/>
+  <path d="M0 333 C300 326 600 338 1000 332" stroke="#fff" stroke-opacity="${glint}" stroke-width="2" fill="none"/></svg>`);
+}
+const scenes = {
+  "lagoon-day"() { S.style.background = "radial-gradient(120% 70% at 78% 14%,rgba(255,255,240,.95) 0%,rgba(255,255,255,0) 38%),linear-gradient(180deg,#36a6f0 0%,#7fd0ff 45%,#d8f4ff 70%,#bfe9a6 71%,#6cc24a 82%,#2f8f2e 100%)";
+    rays(78, 14, .16, 30); sun(78, 14, 11); lagoonLand("#b9f08a", "#3f9b2c", "#8ee05a", "#1f7a22", "#bff3ff", "#2aa0d8"); bubbles(16, 10, 95, 1, 7); },
+  "lagoon-dawn"() { S.style.background = "radial-gradient(90% 60% at 18% 62%,rgba(255,236,200,.95) 0%,rgba(255,200,170,0) 45%),linear-gradient(180deg,#6f8fd8 0%,#d9a7c9 38%,#ffd1a8 62%,#cfe6a8 71%,#7fbf5a 82%,#3b7f3a 100%)";
+    rays(18, 60, .12, 50); lagoonLand("#cfe8a0", "#5c9a45", "#a5d77a", "#2f7a32", "#ffe3cf", "#7fb6d8", .8); bubbles(12, 20, 95, 1, 6, .8); },
+  "lagoon-sunset"() { S.style.background = "radial-gradient(90% 60% at 82% 63%,rgba(255,230,160,1) 0%,rgba(255,150,90,0) 42%),linear-gradient(180deg,#3d5bb0 0%,#c46fa6 35%,#ff9a62 60%,#c8a05a 71%,#6f8a3a 82%,#2f4d22 100%)";
+    rays(82, 62, .14, 50); lagoonLand("#c9b26a", "#5a6e2c", "#8da94a", "#344f1e", "#ffc48a", "#8a5a8a", .9); bubbles(12, 20, 95, 1, 6, .75); },
+  "lagoon-night"() { S.style.background = "radial-gradient(60% 40% at 30% 30%,rgba(90,255,190,.25) 0%,rgba(90,255,190,0) 60%),linear-gradient(180deg,#040a24 0%,#0b1f4f 45%,#16407a 70%,#1d3e3a 71%,#0f2a1c 85%,#06140e 100%)";
+    stars(220);
+    add(`<svg style="position:absolute;inset:0;width:100%;height:70%" viewBox="0 0 1000 400" preserveAspectRatio="none"><defs>
+      <linearGradient id="au" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6affc8" stop-opacity="0"/><stop offset=".55" stop-color="#5affb4" stop-opacity=".55"/><stop offset="1" stop-color="#2aa0ff" stop-opacity="0"/></linearGradient>
+      <filter id="bl"><feGaussianBlur stdDeviation="6"/></filter></defs>
+      <path d="M-50 220 C150 120 300 260 480 160 S800 90 1050 170 L1050 260 C820 190 640 300 470 240 S150 230 -50 300Z" fill="url(#au)" filter="url(#bl)"/>
+      <path d="M-50 160 C200 90 380 200 560 110 S860 70 1050 120 L1050 170 C860 130 700 210 540 160 S200 150 -50 210Z" fill="url(#au)" opacity=".6" filter="url(#bl)"/></svg>`);
+    add(`<div style="position:absolute;left:80%;top:12%;width:7vmin;height:7vmin;border-radius:50%;background:radial-gradient(circle at 40% 40%,#fffbe8,#e8e2c8 60%,#c8c0a0);box-shadow:0 0 6vmin rgba(255,250,220,.6)"></div>`);
+    lagoonLand("#2c5a3a", "#0f2a1a", "#244a2e", "#0a1f12", "#2a5a9a", "#08203a", .5); bubbles(10, 30, 95, 1, 5, .45); },
+  aquarium() { S.style.background = "radial-gradient(80% 50% at 50% -10%,rgba(200,250,255,.9),rgba(200,250,255,0) 60%),linear-gradient(180deg,#5fd3f0 0%,#1b9bd0 40%,#0a5f9a 75%,#073e6a 100%)";
+    rays(50, -10, .14, 80);
+    add(`<svg style="position:absolute;left:0;bottom:0;width:100%;height:40%" viewBox="0 0 1000 300" preserveAspectRatio="none">
+      <path d="M0 250 C200 230 400 260 600 240 S900 250 1000 235 V300 H0Z" fill="#e8d9a8" opacity=".85"/>
+      ${Array.from({ length: 14 }, (_, i) => { const x = 30 + i * 70 + rnd() * 30, h = 120 + rnd() * 120; return `<path d="M${x} 260 C${x - 20} ${260 - h * .4} ${x + 25} ${260 - h * .7} ${x + 5} ${260 - h}" stroke="${i % 2 ? '#4fc65a' : '#2e9a46'}" stroke-width="${7 + rnd() * 6}" fill="none" stroke-linecap="round"/>`; }).join("")}</svg>`);
+    for (let i = 0; i < 7; i++) { const x = 8 + rnd() * 84, y = 22 + rnd() * 40, s = 5 + rnd() * 6, flip = rnd() > .5 ? -1 : 1, c = ["#ff8a3c", "#ffd23c", "#ff5a4a", "#ffffff"][i % 4];
+      add(`<svg style="position:absolute;left:${x}%;top:${y}%;width:${s}vmin;transform:scaleX(${flip})" viewBox="0 0 100 50"><path d="M5 25 L-10 10 Q-4 25 -10 40Z" fill="${c}" opacity=".85" transform="translate(12 0)"/><ellipse cx="55" cy="25" rx="42" ry="18" fill="${c}"/><ellipse cx="60" cy="18" rx="28" ry="7" fill="#fff" opacity=".55"/><circle cx="84" cy="21" r="3.5" fill="#123"/></svg>`); }
+    bubbles(30, 5, 95, .6, 5); },
+  orbs() { S.style.background = "radial-gradient(70% 70% at 30% 30%,#c8fff0 0%,#4fd6c0 35%,#1a8fa0 70%,#0d4f6a 100%)";
+    [[22, 30, 26, "#7affd0"], [62, 52, 34, "#5ac8ff"], [78, 20, 14, "#b8ff7a"], [40, 72, 18, "#7ad0ff"], [10, 70, 10, "#c8ff9a"], [88, 78, 12, "#9ae8ff"]].forEach(([x, y, s, c]) =>
+      add(`<div style="position:absolute;left:${x}%;top:${y}%;width:${s}vmin;height:${s}vmin;margin:-${s / 2}vmin;border-radius:50%;
+        background:radial-gradient(circle at 35% 30%,#fff 0 6%,${c} 30%,rgba(0,60,90,.6) 100%);box-shadow:inset -2vmin -3vmin 5vmin rgba(0,40,70,.35),0 3vmin 6vmin rgba(0,40,70,.35)">
+        <div style="position:absolute;left:18%;top:8%;width:55%;height:30%;border-radius:50%;background:linear-gradient(rgba(255,255,255,.9),rgba(255,255,255,0))"></div></div>`));
+    bubbles(18, 0, 100, .5, 3, .8); },
+  aurora() { S.style.background = "linear-gradient(180deg,#020818 0%,#0a2050 50%,#12406a 72%,#0a2238 73%,#04101e 100%)"; stars(260);
+    add(`<svg style="position:absolute;inset:0;width:100%;height:75%" viewBox="0 0 1000 400" preserveAspectRatio="none"><defs>
+      <linearGradient id="a1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b47aff" stop-opacity="0"/><stop offset=".5" stop-color="#5affb4" stop-opacity=".7"/><stop offset="1" stop-color="#2aa0ff" stop-opacity="0"/></linearGradient>
+      <filter id="f"><feGaussianBlur stdDeviation="8"/></filter></defs>
+      <path d="M-50 260 C120 80 300 300 520 120 S860 60 1050 200 L1050 300 C820 160 650 330 480 230 S150 280 -50 340Z" fill="url(#a1)" filter="url(#f)"/>
+      <path d="M-50 180 C200 60 360 220 600 80 S900 40 1050 100 L1050 160 C880 110 700 230 560 150 S220 150 -50 230Z" fill="url(#a1)" opacity=".55" filter="url(#f)"/></svg>
+      <div style="position:absolute;left:0;right:0;top:73%;bottom:0;background:linear-gradient(rgba(90,255,180,.18),rgba(0,0,0,0))"></div>`); },
+  meadow() { S.style.background = "linear-gradient(180deg,#2f98ea 0%,#86d2ff 50%,#e2f7ff 64%,#a8e07a 65%,#4cad36 85%,#2a7a22 100%)"; rays(20, 12, .14, 60);
+    for (let i = 0; i < 7; i++) { const x = rnd() * 90, y = 6 + rnd() * 34, s = 8 + rnd() * 12;
+      add(`<svg style="position:absolute;left:${x}%;top:${y}%;width:${s}vmin" viewBox="0 0 100 50"><g fill="#fff" opacity=".95"><circle cx="25" cy="32" r="16"/><circle cx="45" cy="22" r="20"/><circle cx="68" cy="28" r="17"/><circle cx="82" cy="36" r="12"/><rect x="20" y="32" width="66" height="16" rx="8"/></g></svg>`); }
+    add(`<svg class="land" style="height:40%" viewBox="0 0 1000 400" preserveAspectRatio="none"><path d="M0 120 C250 40 450 140 650 80 S900 60 1000 90 V400 H0Z" fill="#7ed04e"/><path d="M0 220 C200 160 500 250 750 180 S950 170 1000 190 V400 H0Z" fill="#4bb236"/>
+      ${Array.from({ length: 60 }, () => `<circle cx="${rnd() * 1000}" cy="${230 + rnd() * 160}" r="${2 + rnd() * 3}" fill="${rnd() > .5 ? '#fff' : '#ffe14a'}"/>`).join("")}</svg>`); },
+  koi() { S.style.background = "radial-gradient(70% 60% at 40% 40%,#7fe0f0 0%,#2aa8c8 45%,#0b5f7a 100%)";
+    for (let i = 0; i < 9; i++) { const x = rnd() * 90, y = rnd() * 85, s = 8 + rnd() * 10, r = rnd() * 360;
+      add(`<svg style="position:absolute;left:${x}%;top:${y}%;width:${s}vmin;transform:rotate(${r}deg)" viewBox="0 0 100 100"><path d="M50 50 L50 0 A50 50 0 1 1 30 4Z" fill="#4fae3a"/><path d="M50 50 L50 0 A50 50 0 1 1 30 4Z" fill="none" stroke="#9fe07a" stroke-width="3"/>
+        ${i % 3 === 0 ? '<g transform="translate(55 55)">' + Array.from({ length: 8 }, (_, k) => `<ellipse cx="0" cy="-12" rx="7" ry="13" fill="#ffc0e0" transform="rotate(${k * 45})"/>`).join("") + '<circle r="6" fill="#ffe14a"/></g>' : ""}</svg>`); }
+    for (let i = 0; i < 6; i++) { const x = rnd() * 85, y = rnd() * 85, s = 9 + rnd() * 5, r = rnd() * 360, c = ["#ff8a3c", "#fff", "#ff5a4a", "#ffd23c"][i % 4];
+      add(`<svg style="position:absolute;left:${x}%;top:${y}%;width:${s}vmin;transform:rotate(${r}deg);filter:drop-shadow(0 1vmin 1vmin rgba(0,40,60,.4))" viewBox="0 0 100 40"><path d="M15 20 L0 6 Q6 20 0 34Z" fill="${c}"/><ellipse cx="55" cy="20" rx="42" ry="14" fill="${c}"/><ellipse cx="60" cy="15" rx="26" ry="5" fill="#fff" opacity=".5"/></svg>`); }
+    rays(40, 40, .08, 70); },
+  bubbles() { S.style.background = "radial-gradient(80% 80% at 70% 20%,#d8f6ff 0%,#6cc8f0 35%,#1d7fc0 75%,#0b4a80 100%)"; rays(70, 20, .12, 60); bubbles(40, -10, 100, 2, 22); },
+};
+(scenes[name] || scenes["lagoon-day"])();
+</script></body></html>

@@ -1,0 +1,49 @@
+# Frutiger OS — GRUB theme (used on the live USB/ISO and on installed systems)
+# Fonts (*.pf2) are generated from Noto Sans at build time by the chroot hook.
+title-text: ""
+desktop-image: "background.png"
+desktop-color: "#1f8fe0"
+terminal-font: "Frutiger Sans Regular 18"
+message-font: "Frutiger Sans Regular 18"
+message-color: "#10223a"
+
++ boot_menu {
+  left = 33%
+  top = 56%
+  width = 34%
+  height = 22%
+  item_font = "Frutiger Sans Regular 24"
+  item_color = "#10223a"
+  selected_item_font = "Frutiger Sans Regular 24"
+  selected_item_color = "#0b1d33"
+  selected_item_pixmap_style = "select_*.png"
+  item_height = 44
+  item_padding = 14
+  item_spacing = 6
+  icon_width = 0
+  icon_height = 0
+  item_icon_space = 0
+  scrollbar = false
+}
+
++ progress_bar {
+  id = "__timeout__"
+  left = 33%
+  top = 81%
+  width = 34%
+  height = 8
+  show_text = false
+  fg_color = "#2aa7e8"
+  bg_color = "#dbe9f6"
+  border_color = "#7a9dbf"
+}
+
++ label {
+  left = 31%
+  top = 85%
+  width = 38%
+  align = "center"
+  font = "Frutiger Sans Regular 18"
+  color = "#335577"
+  text = "Use the arrow keys to choose, then press Enter"
+}

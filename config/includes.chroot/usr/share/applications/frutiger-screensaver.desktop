@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Bubbles Screensaver
+Comment=Preview the Frutiger bubbles screensaver
+Exec=frutiger-screensaver --preview
+Icon=preferences-desktop-screensaver
+Categories=Settings;XFCE;

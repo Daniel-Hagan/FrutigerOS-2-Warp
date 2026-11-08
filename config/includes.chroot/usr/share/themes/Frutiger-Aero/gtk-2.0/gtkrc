@@ -1,0 +1,58 @@
+# Frutiger-Aero for GTK 2 apps (needs gtk2-engines-murrine)
+gtk-color-scheme = "bg_color:#f2f7fc\nfg_color:#10223a\nbase_color:#ffffff\ntext_color:#10223a\nselected_bg_color:#3399ff\nselected_fg_color:#ffffff\ntooltip_bg_color:#f8fbff\ntooltip_fg_color:#2a3a4a"
+gtk-button-images = 1
+gtk-menu-images = 1
+
+style "frutiger-default" {
+  xthickness = 1
+  ythickness = 1
+  GtkButton::inner-border = {4, 4, 2, 2}
+  GtkScrollbar::slider-width = 13
+  GtkScrollbar::has-backward-stepper = 0
+  GtkScrollbar::has-forward-stepper = 0
+  bg[NORMAL]      = @bg_color
+  bg[PRELIGHT]    = "#d4ecfd"
+  bg[ACTIVE]      = "#c4e5f6"
+  bg[SELECTED]    = @selected_bg_color
+  bg[INSENSITIVE] = @bg_color
+  fg[NORMAL]      = @fg_color
+  fg[PRELIGHT]    = @fg_color
+  fg[SELECTED]    = @selected_fg_color
+  fg[ACTIVE]      = @fg_color
+  base[NORMAL]    = @base_color
+  base[SELECTED]  = "#cce8ff"
+  base[ACTIVE]    = "#dbecfb"
+  text[NORMAL]    = @text_color
+  text[SELECTED]  = @text_color
+  text[ACTIVE]    = @text_color
+  engine "murrine" {
+    roundness        = 3
+    glazestyle       = 1        # glossy two-tone
+    gradient_shades  = {1.08, 1.02, 0.96, 1.04}
+    highlight_shade  = 1.15
+    lightborder_shade = 1.3
+    contrast         = 0.9
+    menustyle        = 0
+    reliefstyle      = 2
+    scrollbarstyle   = 0
+    progressbarstyle = 0
+    colorize_scrollbar = FALSE
+    focusstyle       = 2
+  }
+}
+style "frutiger-progress" {
+  bg[SELECTED] = "#3fbf22"
+  engine "murrine" { glazestyle = 1 roundness = 2 }
+}
+style "frutiger-menuitem" {
+  bg[PRELIGHT] = "#dcebfd"
+  fg[PRELIGHT] = @fg_color
+}
+style "frutiger-tooltip" {
+  bg[NORMAL] = @tooltip_bg_color
+  fg[NORMAL] = @tooltip_fg_color
+}
+class "GtkWidget" style "frutiger-default"
+class "GtkProgressBar" style "frutiger-progress"
+widget_class "*<GtkMenuItem>*" style "frutiger-menuitem"
+widget "gtk-tooltip*" style "frutiger-tooltip"

@@ -1,0 +1,306 @@
+#!/usr/bin/env python3
+"""Frutiger OS desktop gadgets: a column of glass gadgets on the right of the desktop.
+
+Clock, Weather, CPU/Memory meter, Sticky note, Photo slideshow. Each one has its
+own switch in Personalize → Desktop (plus a master "Desktop gadgets" switch);
+changes apply within a few seconds. Hidden automatically when the Vista Sidebar
+taskbar style is active (it has its own gadgets).
+"""
+import json, math, os, random, sys, time
+sys.path.insert(0, "/usr/lib/frutiger")
+import frutiger_settings as fs
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gtk, Gdk, GdkPixbuf, GLib
+import cairo
+
+NOTES = os.path.expanduser("~/.config/frutiger/notes.txt")
+WEATHER = os.path.expanduser("~/.cache/frutiger/weather.json")
+TASKBAR = os.path.expanduser("~/.config/frutiger/taskbar")
+W = 170
+CODES = {0: "Clear", 1: "Mostly clear", 2: "Partly cloudy", 3: "Cloudy", 45: "Fog", 48: "Fog", 51: "Drizzle", 53: "Drizzle",
+         55: "Drizzle", 61: "Rain", 63: "Rain", 65: "Heavy rain", 71: "Snow", 73: "Snow", 75: "Heavy snow", 80: "Showers",
+         81: "Showers", 82: "Showers", 95: "Thunderstorm", 96: "Thunderstorm", 99: "Thunderstorm"}
+
+CSS = b"""
+.gadget { border-radius: 12px; border: 1px solid alpha(white, .75);
+  background-color: alpha(@accent, .32);
+  background-image: linear-gradient(to bottom, alpha(white,.55), alpha(white,.18) 48%, alpha(white,.05) 50%, alpha(white,.2));
+  box-shadow: 0 4px 12px alpha(#00203f,.35); padding: 8px; color: white; }
+.gadget label { color: white; text-shadow: 0 1px 2px alpha(black,.6); }
+.note { border-radius: 4px; border: 1px solid #e8cf55; padding: 6px; box-shadow: 0 4px 12px alpha(#00203f,.35);
+  background-image: linear-gradient(to bottom, #fff7b8, #ffe873); }
+.note textview, .note textview text { background: transparent; color: #4a3b00; font-family: "Noto Sans"; }
+"""
+
+
+class Canvas(Gtk.DrawingArea):
+    def __init__(self, w, h, draw, fps=0):
+        super().__init__()
+        self.set_size_request(w, h)
+        self.connect("draw", lambda _w, cr: draw(cr, self.get_allocated_width(), self.get_allocated_height()))
+        if fps:
+            GLib.timeout_add(int(1000 / fps), lambda: (self.queue_draw(), True)[1])
+
+
+class Gadgets(Gtk.Window):
+    def __init__(self):
+        super().__init__(type=Gtk.WindowType.TOPLEVEL)
+        self.set_title("Frutiger Gadgets")
+        self.set_decorated(False)
+        self.set_type_hint(Gdk.WindowTypeHint.UTILITY)
+        self.set_keep_below(True)
+        self.set_skip_taskbar_hint(True)
+        self.set_skip_pager_hint(True)
+        self.stick()
+        self.set_app_paintable(True)
+        vis = self.get_screen().get_rgba_visual()
+        if vis:
+            self.set_visual(vis)
+        self.connect("draw", self.clear)
+        prov = Gtk.CssProvider()
+        prov.load_from_data(CSS)
+        Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), prov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        self.add(self.box)
+        self.cpu, self.mem, self.prev = 0.0, 0.0, self.read_cpu()
+        self.photos, self.photo_i, self.photo_pix = [], 0, None
+        self.cfg_time = None
+        self.build()
+        GLib.timeout_add_seconds(3, self.watch)
+        GLib.timeout_add_seconds(2, self.sample)
+        GLib.timeout_add_seconds(8, self.next_photo)
+
+    @staticmethod
+    def clear(_w, cr):
+        cr.set_operator(cairo.OPERATOR_SOURCE)
+        cr.set_source_rgba(0, 0, 0, 0)
+        cr.paint()
+        return False
+
+    def place(self):
+        disp = Gdk.Display.get_default()
+        wa = (disp.get_primary_monitor() or disp.get_monitor(0)).get_workarea()
+        self.move(wa.x + wa.width - W - 16, wa.y + 16)
+
+    def watch(self):
+        m = (fs.mtime(), os.path.getmtime(TASKBAR) if os.path.exists(TASKBAR) else 0)
+        if m != self.cfg_time:
+            self.cfg_time = m
+            self.build()
+        return True
+
+    def build(self):
+        cfg = fs.load()
+        sidebar = open(TASKBAR).read().strip() == "sidebar" if os.path.exists(TASKBAR) else False
+        for ch in self.box.get_children():
+            self.box.remove(ch)
+        if not fs.on(cfg, "gadgets") or sidebar:
+            self.hide()
+            return
+        self.calm = cfg.get("calm_mode") == "on"
+        if fs.on(cfg, "gadget_clock"):
+            self.box.pack_start(Canvas(W, W, self.draw_clock, fps=1), False, False, 0)
+        if fs.on(cfg, "gadget_weather"):
+            self.box.pack_start(self.glass(Canvas(W - 18, 96, self.draw_weather, fps=.1)), False, False, 0)
+        if fs.on(cfg, "gadget_cpu"):
+            self.box.pack_start(self.glass(Canvas(W - 18, 62, self.draw_meters, fps=.5)), False, False, 0)
+        if fs.on(cfg, "gadget_notes"):
+            self.box.pack_start(self.note(), False, False, 0)
+        if fs.on(cfg, "gadget_slideshow"):
+            self.load_photos()
+            self.slide = Canvas(W, 118, self.draw_photo)
+            self.box.pack_start(self.slide, False, False, 0)
+        self.show_all()
+        self.place()
+
+    def glass(self, child):
+        f = Gtk.Box()
+        f.get_style_context().add_class("gadget")
+        f.add(child)
+        return f
+
+    # ---------- clock
+    def draw_clock(self, cr, w, h):
+        cx, cy, R = w / 2, h / 2, w / 2 - 6
+        g = cairo.RadialGradient(cx - R * .3, cy - R * .4, R * .1, cx, cy, R)
+        g.add_color_stop_rgba(0, 1, 1, 1, .95)
+        g.add_color_stop_rgba(.6, .86, .94, 1, .85)
+        g.add_color_stop_rgba(1, .59, .78, .94, .85)
+        cr.arc(cx, cy, R, 0, 2 * math.pi)
+        cr.set_source(g)
+        cr.fill_preserve()
+        cr.set_source_rgba(1, 1, 1, .95)
+        cr.set_line_width(3)
+        cr.stroke()
+        for k in range(12):
+            a = k * math.pi / 6
+            cr.move_to(cx + math.sin(a) * (R - 10), cy - math.cos(a) * (R - 10))
+            cr.line_to(cx + math.sin(a) * (R - 4), cy - math.cos(a) * (R - 4))
+            cr.set_source_rgba(.2, .33, .48, .8)
+            cr.set_line_width(2)
+            cr.stroke()
+        lt = time.localtime()
+        cr.set_line_cap(cairo.LINE_CAP_ROUND)
+        for a, ln, wd, col in (((lt.tm_hour % 12 + lt.tm_min / 60) * math.pi / 6, R * .5, 4.5, (.11, .23, .36)),
+                               ((lt.tm_min + lt.tm_sec / 60) * math.pi / 30, R * .72, 3, (.11, .23, .36)),
+                               (lt.tm_sec * math.pi / 30, R * .8, 1.2, (.88, .25, .1))):
+            cr.move_to(cx, cy)
+            cr.line_to(cx + math.sin(a) * ln, cy - math.cos(a) * ln)
+            cr.set_source_rgb(*col)
+            cr.set_line_width(wd)
+            cr.stroke()
+        cr.save()
+        cr.translate(cx, cy - R * .45)
+        cr.scale(1, .45)
+        cr.arc(0, 0, R * .75, 0, 2 * math.pi)
+        cr.restore()
+        gl = cairo.LinearGradient(0, cy - R, 0, cy)
+        gl.add_color_stop_rgba(0, 1, 1, 1, .55)
+        gl.add_color_stop_rgba(1, 1, 1, 1, 0)
+        cr.set_source(gl)
+        cr.fill()
+
+    # ---------- weather
+    def text(self, cr, s, x, y, size, bold=False, align=0.5):
+        cr.select_font_face("Noto Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_BOLD if bold else cairo.FONT_WEIGHT_NORMAL)
+        cr.set_font_size(size)
+        e = cr.text_extents(s)
+        cr.move_to(x - e.width * align + 1, y + 1)
+        cr.set_source_rgba(0, 0, 0, .45)
+        cr.show_text(s)
+        cr.move_to(x - e.width * align, y)
+        cr.set_source_rgba(1, 1, 1, 1)
+        cr.show_text(s)
+
+    def draw_weather(self, cr, w, h):
+        try:
+            d = json.load(open(WEATHER))
+        except Exception:
+            self.text(cr, "Weather", w / 2, 30, 13, True)
+            self.text(cr, "Set your city in", w / 2, 56, 11)
+            self.text(cr, "Personalize → Desktop", w / 2, 72, 11)
+            return
+        code = int(d.get("weather_code", 0))
+        cx, cy = 34, 44
+        if code in (0, 1) and d.get("is_day", 1):
+            g = cairo.RadialGradient(cx - 4, cy - 4, 2, cx, cy, 18)
+            g.add_color_stop_rgb(0, 1, .98, .7)
+            g.add_color_stop_rgb(1, 1, .78, .15)
+            cr.arc(cx, cy, 17, 0, 2 * math.pi)
+            cr.set_source(g)
+            cr.fill()
+        else:
+            for dx, dy, r in ((-10, 4, 11), (2, -4, 14), (14, 4, 10)):
+                cr.new_sub_path()
+                cr.arc(cx + dx, cy + dy, r, 0, 2 * math.pi)
+            cr.set_source_rgba(1, 1, 1, .95)
+            cr.fill()
+            if code >= 51:
+                cr.set_source_rgba(.6, .85, 1, 1)
+                cr.set_line_width(2)
+                for k in range(4):
+                    cr.move_to(cx - 12 + k * 8, cy + 16)
+                    cr.line_to(cx - 15 + k * 8, cy + 24)
+                cr.stroke()
+        self.text(cr, "%d%s" % (round(d.get("temperature_2m", 0)), d.get("unit", "°")), w - 12, 52, 30, align=1)
+        self.text(cr, (d.get("city") or "")[:18], w / 2, 18, 12, True)
+        self.text(cr, CODES.get(code, ""), w / 2, 86, 11)
+
+    # ---------- CPU / memory
+    @staticmethod
+    def read_cpu():
+        v = [int(x) for x in open("/proc/stat").readline().split()[1:]]
+        return v[3] + v[4], sum(v)
+
+    def sample(self):
+        idle, total = self.read_cpu()
+        pi, pt = self.prev
+        self.cpu = 1 - (idle - pi) / max(1, total - pt)
+        self.prev = (idle, total)
+        m = {l.split(":")[0]: int(l.split()[1]) for l in open("/proc/meminfo")}
+        self.mem = 1 - m.get("MemAvailable", 0) / max(1, m.get("MemTotal", 1))
+        return True
+
+    def draw_meters(self, cr, w, h):
+        for i, (name, v) in enumerate((("CPU", self.cpu), ("Memory", self.mem))):
+            y = 14 + i * 30
+            self.text(cr, "%s  %d%%" % (name, round(v * 100)), 4, y, 11, align=0)
+            cr.rectangle(4, y + 5, w - 8, 8)
+            cr.set_source_rgba(0, 0, 0, .35)
+            cr.fill()
+            g = cairo.LinearGradient(0, y + 5, 0, y + 13)
+            g.add_color_stop_rgb(0, .78, 1, .69)
+            g.add_color_stop_rgb(.5, .37, .82, .23)
+            g.add_color_stop_rgb(.51, .18, .64, .09)
+            g.add_color_stop_rgb(1, .49, .88, .35)
+            cr.rectangle(4, y + 5, max(4, (w - 8) * v), 8)
+            cr.set_source(g)
+            cr.fill()
+
+    # ---------- sticky note
+    def note(self):
+        frame = Gtk.Box()
+        frame.get_style_context().add_class("note")
+        tv = Gtk.TextView()
+        tv.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        tv.set_size_request(W - 14, 110)
+        try:
+            tv.get_buffer().set_text(open(NOTES).read())
+        except OSError:
+            tv.get_buffer().set_text("Click here to write a note…")
+        def save(buf):
+            os.makedirs(os.path.dirname(NOTES), exist_ok=True)
+            open(NOTES, "w").write(buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False))
+        tv.get_buffer().connect("changed", save)
+        frame.add(tv)
+        return frame
+
+    # ---------- photo slideshow
+    def load_photos(self):
+        d = os.path.expanduser("~/Pictures")
+        files = []
+        if os.path.isdir(d):
+            for root, _dirs, fns in os.walk(d):
+                files += [os.path.join(root, f) for f in fns if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))]
+                if len(files) > 400:
+                    break
+        self.photos = files or list(fs.pack().values())
+        random.shuffle(self.photos)
+        self.photo_i, self.photo_pix = 0, None
+        self.next_photo()
+
+    def next_photo(self):
+        if self.photos and not getattr(self, "calm", False) or (self.photos and self.photo_pix is None):
+            path = self.photos[self.photo_i % len(self.photos)]
+            self.photo_i += 1
+            try:
+                self.photo_pix = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, W * 2, 236, True)
+            except GLib.Error:
+                self.photo_pix = None
+            if hasattr(self, "slide"):
+                self.slide.queue_draw()
+        return True
+
+    def draw_photo(self, cr, w, h):
+        cr.rectangle(0, 0, w, h)
+        cr.set_source_rgba(1, 1, 1, .95)
+        cr.fill()
+        if self.photo_pix:
+            pw, ph = self.photo_pix.get_width(), self.photo_pix.get_height()
+            k = max((w - 10) / pw, (h - 10) / ph)
+            cr.save()
+            cr.rectangle(5, 5, w - 10, h - 10)
+            cr.clip()
+            cr.translate(w / 2 - pw * k / 2, h / 2 - ph * k / 2)
+            cr.scale(k, k)
+            Gdk.cairo_set_source_pixbuf(cr, self.photo_pix, 0, 0)
+            cr.paint()
+            cr.restore()
+
+
+if __name__ == "__main__":
+    GLib.set_prgname("frutiger-gadgets")
+    Gadgets().connect("destroy", Gtk.main_quit)
+    Gtk.main()

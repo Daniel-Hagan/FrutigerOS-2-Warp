@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""Frutiger OS — Sundial Clock taskbar.
+
+A glossy clock face in the bottom-left corner. Your apps are its hour markers
+(up to 12 on the rim, more on an inner ring); the hands show the real time and
+the orb in the middle opens the Start menu. Running apps glow, the active one
+has a bright ring, pinned apps that aren't running are paler.
+"""
+import math, sys, time
+sys.path.insert(0, "/usr/lib/frutiger")
+from frutiger_strip import Strip, run, accent, cairo
+
+R = 112          # dial radius
+RIM_R = 86       # radius of the app ring
+INNER_R = 52
+BUB = 16         # app bubble radius
+
+
+class Sundial(Strip):
+    TITLE = "Frutiger Sundial"
+    PRGNAME = "frutiger-sundial"
+    EDGE = "corner"
+    CORNER_W, CORNER_H = 2 * R + 20, 2 * R + 20 + 34      # headroom for labels
+    ORB = 40
+    CLOCK = False
+    item_radius = BUB
+    FPS = 12
+
+    def center(self):
+        return (self.W / 2, self.H - R - 10)
+
+    def orb_center(self):
+        return self.center() if hasattr(self, "W") else (0, 0)
+
+    def place(self):
+        super().place()
+        self.orb_hit = self.center() + (self.ORB / 2,)
+
+    def after_realize(self):                               # click only on the dial, not the corners
+        cx, cy = self.center()
+        reg = cairo.Region()
+        for y in range(int(cy - R), int(cy + R), 4):
+            half = math.sqrt(max(0, R * R - (y + 2 - cy) ** 2))
+            reg.union(cairo.RectangleInt(int(cx - half), y, int(2 * half), 4))
+        self.input_shape_combine_region(reg)
+        return False
+
+    def draw_background(self, cr, w, h, top, t):
+        cx, cy = self.center()
+        ar, ag, ab = accent()
+        cr.arc(cx, cy + 4, R, 0, 2 * math.pi)             # soft shadow
+        cr.set_source_rgba(0, .1, .25, .25)
+        cr.fill()
+        face = cairo.RadialGradient(cx - R * .3, cy - R * .4, R * .1, cx, cy, R)
+        face.add_color_stop_rgba(0, 1, 1, 1, .92)
+        face.add_color_stop_rgba(.7, .86, .94, 1, .82)
+        face.add_color_stop_rgba(1, ar, ag, ab, .75)
+        cr.arc(cx, cy, R, 0, 2 * math.pi)
+        cr.set_source(face)
+        cr.fill()
+        cr.arc(cx, cy, R - 1, 0, 2 * math.pi)             # chrome rim
+        cr.set_source_rgba(1, 1, 1, .95)
+        cr.set_line_width(3)
+        cr.stroke()
+        cr.arc(cx, cy, R + .5, 0, 2 * math.pi)
+        cr.set_source_rgba(0, .2, .4, .5)
+        cr.set_line_width(1)
+        cr.stroke()
+        for k in range(60):                               # minute ticks
+            a = k * math.pi / 30
+            r0 = R - (10 if k % 5 == 0 else 6)
+            cr.move_to(cx + math.sin(a) * r0, cy - math.cos(a) * r0)
+            cr.line_to(cx + math.sin(a) * (R - 4), cy - math.cos(a) * (R - 4))
+            cr.set_source_rgba(.12, .25, .42, .6 if k % 5 == 0 else .3)
+            cr.set_line_width(2 if k % 5 == 0 else 1)
+            cr.stroke()
+
+    def item_pos(self, i, n, it, w, top, t):
+        cx, cy = self.center()
+        if i < 12:
+            a, r = i * math.pi / 6, RIM_R
+        else:
+            m = min(8, n - 12)
+            a, r = (i - 12) * 2 * math.pi / m, INNER_R
+        return cx + math.sin(a) * r, cy - math.cos(a) * r
+
+    def draw_item(self, cr, it, x, y, t, hover):
+        a = 1.0 if it.running else .65
+        if it.running:
+            pulse = (.6 + .4 * math.sin(t * 4)) if it.attention else 1
+            g = cairo.RadialGradient(x, y, 2, x, y, BUB + 10)
+            g.add_color_stop_rgba(0, 1, 1, .8, .6 * pulse)
+            g.add_color_stop_rgba(1, 1, 1, .8, 0)
+            cr.set_source(g)
+            cr.arc(x, y, BUB + 10, 0, 2 * math.pi)
+            cr.fill()
+        b = cairo.RadialGradient(x - 5, y - 6, 1, x, y, BUB)
+        b.add_color_stop_rgba(0, 1, 1, 1, .95 * a)
+        b.add_color_stop_rgba(.8, .8, .92, 1, .5 * a)
+        b.add_color_stop_rgba(1, 1, 1, 1, .9 * a)
+        cr.arc(x, y, BUB, 0, 2 * math.pi)
+        cr.set_source(b)
+        cr.fill()
+        self.paint_icon(cr, it, x, y, 20, a)
+        if it.active:
+            cr.arc(x, y, BUB + 2.5, 0, 2 * math.pi)
+            cr.set_source_rgba(.25, .65, 1, .95)
+            cr.set_line_width(2)
+            cr.stroke()
+
+    def draw_foreground(self, cr, t):
+        cx, cy = self.center()
+        lt = time.localtime()
+        sec = lt.tm_sec + (time.time() % 1)
+        hands = [((lt.tm_hour % 12 + lt.tm_min / 60) * math.pi / 6, 40, 4.5, (.08, .2, .38, .9)),
+                 ((lt.tm_min + sec / 60) * math.pi / 30, 62, 3, (.08, .2, .38, .9)),
+                 (sec * math.pi / 30, 70, 1.4, (.9, .25, .1, .95))]
+        cr.set_line_cap(cairo.LINE_CAP_ROUND)
+        for a, length, width, col in hands:
+            cr.move_to(cx, cy)
+            cr.line_to(cx + math.sin(a) * length, cy - math.cos(a) * length)
+            cr.set_source_rgba(*col)
+            cr.set_line_width(width)
+            cr.stroke()
+        gl = cairo.LinearGradient(0, cy - R, 0, cy)        # glass glare over the whole face
+        gl.add_color_stop_rgba(0, 1, 1, 1, .45)
+        gl.add_color_stop_rgba(1, 1, 1, 1, 0)
+        cr.save()
+        cr.translate(cx, cy - R * .45)
+        cr.scale(1, .5)
+        cr.arc(0, 0, R * .8, 0, 2 * math.pi)
+        cr.restore()
+        cr.set_source(gl)
+        cr.fill()
+
+
+if __name__ == "__main__":
+    run(Sundial)

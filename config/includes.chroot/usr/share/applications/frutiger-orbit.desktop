@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Orbit Launcher
+Comment=Corner orb taskbar for Frutiger OS
+Exec=frutiger-taskbar orbit
+Icon=start-here
+Categories=Utility;
+NoDisplay=true

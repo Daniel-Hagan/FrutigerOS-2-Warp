@@ -1,0 +1,19 @@
+[Icon Theme]
+Name=Frutiger
+Comment=Papirus Light with Frutiger OS branding
+Inherits=Papirus-Light,hicolor
+Directories=scalable/places,scalable/apps
+
+[scalable/places]
+Size=48
+MinSize=16
+MaxSize=512
+Type=Scalable
+Context=Places
+
+[scalable/apps]
+Size=48
+MinSize=16
+MaxSize=512
+Type=Scalable
+Context=Applications

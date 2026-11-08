@@ -1,0 +1,100 @@
+#!/bin/sh
+# Frutiger OS chroot hook: runs inside the image while it is being built.
+set -e
+
+# System-wide defaults (dconf: Plank Bubble Dock settings)
+dconf update
+
+# Cursor theme: compile the PNG sources with xcursorgen, then add the standard names
+CUR=/usr/share/icons/Frutiger-Cursors
+if command -v xcursorgen >/dev/null && [ -d $CUR/src ]; then
+  mkdir -p $CUR/cursors
+  for cfg in $CUR/src/*.cfg; do
+    n=$(basename "$cfg" .cfg)
+    (cd $CUR/src && xcursorgen "$cfg" "$CUR/cursors/$n")
+  done
+  while read -r alias target; do
+    [ -e "$CUR/cursors/$alias" ] || ln -s "$target" "$CUR/cursors/$alias"
+  done < $CUR/src/aliases.txt
+  rm -rf $CUR/src
+fi
+
+# Selawik (OFL, a free Segoe UI-style font) from Microsoft's GitHub releases; skipped if offline
+mkdir -p /usr/share/fonts/truetype/selawik
+if [ -z "$(ls /usr/share/fonts/truetype/selawik 2>/dev/null)" ]; then
+  url=$(curl -fsSL https://api.github.com/repos/microsoft/Selawik/releases/latest 2>/dev/null \
+        | python3 -c "import json,sys; a=json.load(sys.stdin).get('assets',[]); print(next((x['browser_download_url'] for x in a if x['name'].endswith('.zip')), ''))" 2>/dev/null) || true
+  if [ -n "$url" ] && curl -fsSL -o /tmp/selawik.zip "$url"; then
+    unzip -jo /tmp/selawik.zip '*.ttf' -d /usr/share/fonts/truetype/selawik >/dev/null 2>&1 || true
+    unzip -jo /tmp/selawik.zip '*LICENSE*' -d /usr/share/fonts/truetype/selawik >/dev/null 2>&1 || true
+    rm -f /tmp/selawik.zip
+  fi
+  fc-cache -f >/dev/null 2>&1 || true
+fi
+
+# Glossy icon theme: every app icon in a glass bubble (Papirus + hicolor + pixmaps)
+python3 /usr/share/frutiger/make_gloss_icons.py || true
+
+# Icon caches
+gtk-update-icon-cache -f /usr/share/icons/Frutiger || true
+gtk-update-icon-cache -f /usr/share/icons/Frutiger-Native || true
+gtk-update-icon-cache -f /usr/share/icons/Frutiger-Gloss || true
+
+# Boot menu theme fonts: Noto Sans -> GRUB's .pf2 format ("Frutiger Sans Regular NN")
+T=/usr/share/grub/themes/frutiger
+NOTO=/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf
+if command -v grub-mkfont >/dev/null && [ -f "$NOTO" ]; then
+  for s in 18 24; do
+    grub-mkfont -n "Frutiger Sans" -s "$s" -o "$T/frutiger-sans-$s.pf2" "$NOTO"
+  done
+fi
+
+# Installer branding: point Calamares at the Frutiger branding, rename its launcher
+if [ -f /etc/calamares/settings.conf ]; then
+  sed -i 's/^branding:.*/branding: frutiger/' /etc/calamares/settings.conf
+fi
+for f in /usr/share/applications/install-debian.desktop /usr/share/applications/calamares.desktop; do
+  [ -f "$f" ] || continue
+  sed -i -e 's/^Name=.*/Name=Install Frutiger OS/' -e 's/^Name\[.*//' \
+         -e 's/^Comment=.*/Comment=Install Frutiger OS on this computer/' \
+         -e 's/^Icon=.*/Icon=frutiger-os/' "$f"
+done
+
+# Boot splash
+plymouth-set-default-theme frutiger
+update-initramfs -u -k all
+
+# LightDM uses the GTK greeter
+mkdir -p /etc/lightdm/lightdm.conf.d
+cat > /etc/lightdm/lightdm.conf.d/50-frutiger.conf <<CONF
+[Seat:*]
+greeter-session=lightdm-gtk-greeter
+user-session=xfce
+CONF
+
+# Make Frutiger-Aero the system-wide GTK default too (root apps, installer)
+mkdir -p /etc/gtk-3.0
+cat > /etc/gtk-3.0/settings.ini <<CONF
+[Settings]
+gtk-theme-name=Frutiger-Aero
+gtk-icon-theme-name=Frutiger-Gloss
+gtk-font-name=Noto Sans 10
+gtk-cursor-theme-name=Frutiger-Cursors
+gtk-sound-theme-name=Frutiger
+CONF
+
+# Branding (keeps ID=debian so apt and Debian tooling still work)
+sed -i 's/^PRETTY_NAME=.*/PRETTY_NAME="Frutiger OS 1.0 (Lagoon)"/' /usr/lib/os-release
+echo "Frutiger OS 1.0 \"Lagoon\" (based on Debian 12)" > /etc/frutiger-release
+
+chmod 755 /usr/bin/frutiger-*
+
+# Qt 6 app launchers get qt6ct (re-run automatically after apt installs)
+/usr/bin/frutiger-qt6-wrap
+
+# Flatpak: add Flathub and let sandboxed apps use the Aero GTK theme
+flatpak remote-add --system --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
+flatpak override --system \
+  --filesystem=~/.themes:ro \
+  --filesystem=xdg-config/gtk-3.0:ro \
+  --env=GTK_THEME=Frutiger-Aero || true

@@ -1,0 +1,19 @@
+[Icon Theme]
+Name=Frutiger Native
+Comment=Apps use their own icons; Papirus Light for folders, files and system icons
+Inherits=hicolor,Papirus-Light
+Directories=scalable/places,scalable/apps
+
+[scalable/places]
+Size=48
+MinSize=16
+MaxSize=512
+Type=Scalable
+Context=Places
+
+[scalable/apps]
+Size=48
+MinSize=16
+MaxSize=512
+Type=Scalable
+Context=Applications

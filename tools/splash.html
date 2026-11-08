@@ -1,0 +1,24 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;width:1920px;height:1080px;overflow:hidden}
+#s{position:absolute;inset:0;background:
+ radial-gradient(60% 55% at 50% 38%,rgba(255,255,255,.85) 0%,rgba(255,255,255,0) 60%),
+ linear-gradient(180deg,#1f8fe0 0%,#62c3ff 38%,#c9f0ff 62%,#7fd8f0 63%,#2aa0d0 82%,#0a5f98 100%)}
+#rays{position:absolute;inset:-60%;background:repeating-conic-gradient(from 0deg at 50% 38%,rgba(255,255,255,.18) 0deg 4deg,rgba(255,255,255,0) 4deg 11deg);
+ -webkit-mask:radial-gradient(circle at 50% 38%,#000 0%,transparent 45%)}
+.b{position:absolute;border-radius:50%;background:radial-gradient(circle at 30% 28%,rgba(255,255,255,.95) 0 8%,rgba(255,255,255,.25) 18%,rgba(140,220,255,.12) 55%,rgba(255,255,255,.55) 72%,rgba(255,255,255,0) 74%)}
+svg{position:absolute;left:0;bottom:0;width:100%;height:40%}
+</style></head><body><div id="s"><div id="rays"></div>
+<svg viewBox="0 0 1000 400" preserveAspectRatio="none">
+<defs><linearGradient id="w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bff3ff" stop-opacity=".0"/><stop offset=".3" stop-color="#9fe6ff" stop-opacity=".5"/><stop offset="1" stop-color="#0a5f98" stop-opacity=".6"/></linearGradient>
+<linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b9f08a"/><stop offset="1" stop-color="#3f9b2c"/></linearGradient></defs>
+<path d="M0 95 C120 70 220 88 320 129 L0 129Z" fill="url(#g)" opacity=".9"/>
+<path d="M680 129 C780 84 900 76 1000 92 L1000 129Z" fill="url(#g)" opacity=".9"/>
+<path d="M0 130 C250 120 500 138 1000 128 V400 H0Z" fill="url(#w)"/>
+<path d="M0 131 C250 121 500 139 1000 129" stroke="#fff" stroke-opacity=".8" stroke-width="2" fill="none"/>
+<g stroke="#fff" stroke-opacity=".25" fill="none"><path d="M80 200 q60 -10 120 0"/><path d="M600 260 q80 -12 160 0"/><path d="M300 330 q70 -10 140 0"/><path d="M820 190 q50 -8 100 0"/></g>
+</svg></div>
+<script>
+const r=n=>{let x=Math.sin(n*9301+49297)*233280;return x-Math.floor(x)};
+for(let i=0;i<26;i++){const d=document.createElement('div');d.className='b';const s=10+r(i)*70;
+d.style.cssText=`width:${s}px;height:${s}px;left:${r(i+50)*100}%;top:${55+r(i+99)*45}%;opacity:${.4+r(i+7)*.6}`;document.body.appendChild(d)}
+</script></body></html>
