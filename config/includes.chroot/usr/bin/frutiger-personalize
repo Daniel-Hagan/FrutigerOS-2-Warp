@@ -172,6 +172,16 @@ class Personalize(Gtk.Window):
         return box
 
     # ------------------------------------------------------------ Desktop
+
+    def custom_chosen(self, btn):
+        self.custom_preview(btn.get_filename())
+        self.wall_buttons["custom"].set_active(True)
+
+    def custom_preview(self, path):
+        try:
+            self.custom_prev.set_from_pixbuf(GdkPixbuf.Pixbuf.new_from_file_at_scale(path, 64, 36, True))
+        except Exception:
+            self.custom_prev.clear()
     def switch(self, grid, row, key, label, desc=None):
         sw = Gtk.Switch()
         sw.set_active(self.cfg.get(key) == "on")
@@ -199,7 +209,8 @@ class Personalize(Gtk.Window):
         self.wall_buttons = radio_group(box, [
             ("timeofday", "Time of day", "Lagoon at dawn, midday, sunset and a starry night with an aurora"),
             ("static", "One picture", "Choose it below"),
-            ("slideshow", "Slideshow", "Cycle through the Frutiger wallpaper pack")], self.cfg.get("wallpaper_mode"))
+            ("custom", "Your own picture", "Any photo or image on your computer"),
+            ("slideshow", "Slideshow", "Cycle through the Frutiger pack or a folder of your own")], self.cfg.get("wallpaper_mode"))
         flow = Gtk.FlowBox(max_children_per_line=5, selection_mode=Gtk.SelectionMode.SINGLE)
         flow.set_homogeneous(True)
         self.flow_names = []
@@ -217,6 +228,45 @@ class Personalize(Gtk.Window):
         flow.connect("child-activated", lambda f, ch: self.wall_buttons["static"].set_active(True))
         self.flow = flow
         box.pack_start(flow, False, False, 0)
+        # your own picture
+        imgs = Gtk.FileFilter()
+        imgs.set_name("Pictures")
+        imgs.add_mime_type("image/*")
+        crow = Gtk.Box(spacing=8)
+        crow.pack_start(Gtk.Label(label="Your picture:"), False, False, 0)
+        self.custom_btn = Gtk.FileChooserButton(title="Choose a wallpaper", action=Gtk.FileChooserAction.OPEN)
+        self.custom_btn.add_filter(imgs)
+        self.custom_btn.set_current_folder(os.path.expanduser("~/Pictures") if os.path.isdir(os.path.expanduser("~/Pictures")) else HOME)
+        if os.path.isfile(self.cfg.get("custom_wallpaper", "")):
+            self.custom_btn.set_filename(self.cfg["custom_wallpaper"])
+        self.custom_prev = Gtk.Image()
+        self.custom_btn.connect("file-set", self.custom_chosen)
+        crow.pack_start(self.custom_btn, False, False, 0)
+        crow.pack_start(Gtk.Label(label="Position:"), False, False, 0)
+        self.fit = Gtk.ComboBoxText()
+        for k, n in (("fill", "Fill"), ("fit", "Fit"), ("stretch", "Stretch"), ("center", "Center"), ("tile", "Tile")):
+            self.fit.append(k, n)
+        self.fit.set_active_id(self.cfg.get("wallpaper_fit", "fill"))
+        self.fit.set_tooltip_text("How your own pictures fill the screen")
+        crow.pack_start(self.fit, False, False, 0)
+        crow.pack_start(self.custom_prev, False, False, 0)
+        self.custom_preview(self.cfg.get("custom_wallpaper", ""))
+        box.pack_start(crow, False, False, 0)
+
+        orow = Gtk.Box(spacing=8)
+        orow.pack_start(Gtk.Label(label="Slideshow pictures:"), False, False, 0)
+        self.slide_src = Gtk.ComboBoxText()
+        self.slide_src.append("pack", "Frutiger pack")
+        self.slide_src.append("folder", "A folder of my own")
+        self.slide_src.set_active_id(self.cfg.get("slideshow_source", "pack"))
+        orow.pack_start(self.slide_src, False, False, 0)
+        self.slide_dir = Gtk.FileChooserButton(title="Choose a folder of pictures", action=Gtk.FileChooserAction.SELECT_FOLDER)
+        self.slide_dir.set_current_folder(self.cfg.get("slideshow_folder") or (os.path.expanduser("~/Pictures") if os.path.isdir(os.path.expanduser("~/Pictures")) else HOME))
+        self.slide_dir.set_sensitive(self.slide_src.get_active_id() == "folder")
+        self.slide_src.connect("changed", lambda w: self.slide_dir.set_sensitive(w.get_active_id() == "folder"))
+        orow.pack_start(self.slide_dir, False, False, 0)
+        box.pack_start(orow, False, False, 0)
+
         srow = Gtk.Box(spacing=8)
         srow.pack_start(Gtk.Label(label="Slideshow: change every"), False, False, 0)
         self.slide_min = Gtk.SpinButton.new_with_range(1, 240, 1)
@@ -349,6 +399,15 @@ class Personalize(Gtk.Window):
         if sel:
             c["wallpaper"] = self.flow_names[sel[0].get_index()]
         c["slideshow_minutes"] = str(int(self.slide_min.get_value()))
+        chosen = self.custom_btn.get_filename()
+        if chosen:
+            c["custom_wallpaper"] = fs.keep_copy(chosen)
+        if c["wallpaper_mode"] == "custom" and not os.path.isfile(c.get("custom_wallpaper", "")):
+            c["wallpaper_mode"] = "timeofday"   # nothing chosen yet
+        c["wallpaper_fit"] = self.fit.get_active_id() or "fill"
+        c["slideshow_source"] = self.slide_src.get_active_id() or "pack"
+        if self.slide_dir.get_filename():
+            c["slideshow_folder"] = self.slide_dir.get_filename()
         c["screensaver_minutes"] = str(int(self.saver_min.get_value()))
         city = self.city.get_text().strip()
         if city != c.get("weather_city"):

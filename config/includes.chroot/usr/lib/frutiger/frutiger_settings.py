@@ -11,8 +11,12 @@ PATH = os.path.expanduser("~/.config/frutiger/desktop.ini")
 BG = "/usr/share/backgrounds/frutiger"
 
 DEFAULTS = {
-    "wallpaper_mode": "timeofday",     # timeofday | static | slideshow
+    "wallpaper_mode": "timeofday",     # timeofday | static | custom | slideshow
     "wallpaper": "lagoon-day",         # used when static (a name in the pack)
+    "custom_wallpaper": "",            # used when custom (your own picture; a copy kept in CUSTOM_DIR)
+    "wallpaper_fit": "fill",           # fill | fit | stretch | center | tile (your own pictures)
+    "slideshow_source": "pack",        # pack | folder
+    "slideshow_folder": "",            # used when the slideshow source is a folder of your own
     "slideshow_minutes": "15",
     "live_effects": "on",              # rising bubbles + ripples over the wallpaper
     "weather_effects": "off",          # rain / snow over the wallpaper (needs a city; uses the internet)
@@ -68,6 +72,36 @@ def mtime():
         return os.path.getmtime(PATH)
     except OSError:
         return 0
+
+
+CUSTOM_DIR = os.path.expanduser("~/.local/share/backgrounds/frutiger-custom")
+IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff", ".svg")
+# xfdesktop image-style: 1 centered, 2 tiled, 3 stretched, 4 scaled (fit), 5 zoomed (fill)
+FIT_STYLE = {"fill": 5, "fit": 4, "stretch": 3, "center": 1, "tile": 2}
+
+
+def folder_images(folder):
+    """Pictures in a folder of your own (not recursive), sorted by name."""
+    try:
+        return [os.path.join(folder, f) for f in sorted(os.listdir(folder), key=str.lower)
+                if f.lower().endswith(IMAGE_EXT) and not f.startswith(".")]
+    except OSError:
+        return []
+
+
+def keep_copy(path):
+    """Copy a chosen picture into CUSTOM_DIR so the wallpaper survives the original being moved."""
+    if not path or os.path.dirname(os.path.abspath(path)) == CUSTOM_DIR:
+        return path
+    import shutil
+    os.makedirs(CUSTOM_DIR, exist_ok=True)
+    dest = os.path.join(CUSTOM_DIR, os.path.basename(path))
+    try:
+        if not (os.path.exists(dest) and os.path.samefile(path, dest)):
+            shutil.copy2(path, dest)
+        return dest
+    except OSError:
+        return path
 
 
 def pack():

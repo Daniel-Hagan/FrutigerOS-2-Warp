@@ -1,0 +1,46 @@
+#!/usr/bin/python3
+"""frutiger-wallpaper — set your own picture (or a folder slideshow) as the Frutiger OS wallpaper.
+
+  frutiger-wallpaper PICTURE [--fit fill|fit|stretch|center|tile]
+  frutiger-wallpaper --folder FOLDER          slideshow of a folder of your own
+  frutiger-wallpaper --pack NAME              one of the built-in scenes (e.g. aero, lagoon-day)
+  frutiger-wallpaper --time-of-day            back to the Lagoon time-of-day wallpaper
+
+frutiger-desktopd picks the change up within a few seconds. Used by the file
+manager's right-click "Set as desktop wallpaper" action.
+"""
+import os, sys
+sys.path.insert(0, os.environ.get("FRUTIGER_LIB", "/usr/lib/frutiger"))
+import frutiger_settings as fs
+
+def main(a):
+    if not a or a[0] in ("-h", "--help"):
+        print(__doc__.strip()); return 0
+    c = fs.load()
+    if "--fit" in a:
+        i = a.index("--fit"); fit = a[i + 1] if i + 1 < len(a) else ""
+        if fit not in fs.FIT_STYLE:
+            print("--fit must be one of: " + ", ".join(fs.FIT_STYLE)); return 2
+        c["wallpaper_fit"] = fit; del a[i:i + 2]
+    if not a:
+        fs.save(c); return 0
+    if a[0] == "--time-of-day":
+        c["wallpaper_mode"] = "timeofday"
+    elif a[0] == "--pack" and len(a) > 1:
+        if a[1] not in fs.pack():
+            print("Not in the pack. Choose from: " + ", ".join(sorted(fs.pack()))); return 2
+        c["wallpaper_mode"], c["wallpaper"] = "static", a[1]
+    elif a[0] == "--folder" and len(a) > 1:
+        d = os.path.abspath(os.path.expanduser(a[1]))
+        if not fs.folder_images(d):
+            print("No pictures found in " + d); return 2
+        c["wallpaper_mode"], c["slideshow_source"], c["slideshow_folder"] = "slideshow", "folder", d
+    else:
+        p = os.path.abspath(os.path.expanduser(a[0]))
+        if not (os.path.isfile(p) and p.lower().endswith(fs.IMAGE_EXT)):
+            print("Not a picture: " + p); return 2
+        c["wallpaper_mode"], c["custom_wallpaper"] = "custom", fs.keep_copy(p)
+    fs.save(c)
+    return 0
+
+sys.exit(main(sys.argv[1:]))
