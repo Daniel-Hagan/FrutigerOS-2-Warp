@@ -180,7 +180,7 @@ class Gadgets(Gtk.Window):
         except Exception:
             self.text(cr, "Weather", w / 2, 30, 13, True)
             self.text(cr, "Set your city in", w / 2, 56, 11)
-            self.text(cr, "Personalize → Desktop", w / 2, 72, 11)
+            self.text(cr, "Personalize > Desktop", w / 2, 72, 11)
             return
         code = int(d.get("weather_code", 0))
         cx, cy = 34, 44

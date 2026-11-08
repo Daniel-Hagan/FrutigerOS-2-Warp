@@ -95,6 +95,25 @@ def app_for_window(w):
     return None
 
 
+def shape_region(circles=(), rects=(), ellipses=()):
+    """A cairo.Region made of circles (x, y, r), rectangles (x, y, w, h) and
+    ellipses (x, y, rx, ry), built from 3-px stripes. Used as the window's
+    shape so only what's drawn exists on screen — no box around the widget
+    even when no compositor is running (VMs, old graphics)."""
+    reg = cairo.Region()
+    for x, y, w, h in rects:
+        reg.union(cairo.RectangleInt(int(x), int(y), max(1, int(w)), max(1, int(h))))
+    for x, y, r in circles:
+        ellipses = list(ellipses) + [(x, y, r, r)]
+    for x, y, rx, ry in ellipses:
+        for yy in range(int(y - ry), int(y + ry) + 1, 3):
+            k = 1 - ((yy + 1.5 - y) / max(1, ry)) ** 2
+            if k > 0:
+                half = rx * math.sqrt(k)
+                reg.union(cairo.RectangleInt(int(x - half), yy, max(1, int(2 * half)), 3))
+    return reg
+
+
 def set_strut(gtkwin, side, size, start, end):
     """Reserve `size` px along one screen edge (EWMH strut) via python3-xlib.
     side: "bottom" | "top" | "right"; start/end: the span along that edge."""
@@ -185,6 +204,7 @@ class Strip(Gtk.Window):
         for sig in ("window-opened", "window-closed", "active-window-changed"):
             self.screen.connect(sig, lambda *a: self.refresh())
         self.items, self.pos = [], {}
+        self._label_rect = None
         self.hover = None
         self.t0 = time.monotonic()
         self.place()
@@ -241,9 +261,24 @@ class Strip(Gtk.Window):
             set_strut(self, "top", h, g.x, g.x + g.width - 1)
         elif self.EDGE == "right":
             set_strut(self, "right", w, g.y, g.y + g.height - 1)
-        # only the strip itself takes clicks; the headroom is click-through
-        self.input_shape_combine_region(cairo.Region(cairo.RectangleInt(x, y, w, h)))
+        self.apply_shape()
         return False
+
+    def base_shape(self):
+        """Shape parts that are always there: (circles, rects, ellipses)."""
+        return [], [self.rect], []
+
+    def apply_shape(self, label_rect=None):
+        circles, rects, ellipses = self.base_shape()
+        circles = list(circles) + [(x, y, self.item_radius + 14) for x, y in self.pos.values()]
+        if self.ORB:
+            ox, oy = self.orb_center()
+            circles.append((ox, oy, self.ORB / 2 + 2))
+        rects = list(rects) + ([label_rect] if label_rect else [])
+        key = (tuple((int(a), int(b), int(c)) for a, b, c in circles), tuple(tuple(int(v) for v in r) for r in rects))
+        if key != getattr(self, "_shape_key", None):
+            self._shape_key = key
+            self.shape_combine_region(shape_region(circles, rects, ellipses))
 
     # ---- model
     def app_of(self, w):
@@ -326,6 +361,7 @@ class Strip(Gtk.Window):
             self.pos[it.key] = (x, y)
             self.draw_item(cr, it, x, y, t, hov)
         self.draw_foreground(cr, t)
+        self._label_rect = None
         if self.ORB:
             ox, oy = self.orb_center()
             Gdk.cairo_set_source_pixbuf(cr, self.orb, ox - self.ORB / 2, oy - self.ORB / 2)
@@ -341,6 +377,8 @@ class Strip(Gtk.Window):
                 self.draw_label(cr, self.hover, self.rect[0] - 90, y + 11)
             else:
                 self.draw_label(cr, self.hover, x, y - r - 6)
+        if self.get_realized():
+            self.apply_shape(self._label_rect)
         return False
 
     def draw_foreground(self, cr, t):
@@ -370,6 +408,7 @@ class Strip(Gtk.Window):
         w, h = e.width + 20, 22
         x = min(max(4, cx - w / 2), self.W - w - 4)
         y = max(2, bottom - h)
+        self._label_rect = (x - 2, y - 2, w + 4, h + 4)
         rounded(cr, x, y, w, h, 11)
         cr.set_source_rgba(.04, .16, .28, .78)
         cr.fill_preserve()

@@ -40,14 +40,9 @@ class LilyPond(Strip):
         super().place()
         self.orb_hit = self.center() + (self.ORB / 2,)
 
-    def after_realize(self):
+    def base_shape(self):                                  # the pond and its grassy bank, not the square
         cx, cy = self.center()
-        reg = cairo.Region()
-        for y in range(int(cy - RY), int(cy + RY), 4):
-            half = RX * math.sqrt(max(0, 1 - ((y + 2 - cy) / RY) ** 2))
-            reg.union(cairo.RectangleInt(int(cx - half), y, int(2 * half), 4))
-        self.input_shape_combine_region(reg)
-        return False
+        return [], [], [(cx, cy + 2, RX + 7, RY + 7)]
 
     def pond(self, cr, cx, cy, grow=0):
         cr.save()

@@ -17,6 +17,9 @@ gi.require_version("Gdk", "3.0")
 gi.require_version("Wnck", "3.0")
 from gi.repository import Gtk, Gdk, GdkPixbuf, Gio, GLib, Wnck
 import cairo
+sys_path = __import__("sys").path
+sys_path.insert(0, "/usr/lib/frutiger")
+from frutiger_strip import shape_region
 
 ORB_IMG = "/usr/share/frutiger/start-orb.png"
 PIN_FILE = os.path.expanduser("~/.config/frutiger/orbit-pins")
@@ -207,15 +210,9 @@ class Orbit(Gtk.Window):
         cr.paint()
         cr.set_operator(cairo.OPERATOR_OVER)
         ar, ag, ab = accent()
+        self._label_rect = None
         if self.t > 0:
             self.layout()
-            # faint orbit tracks
-            for r in (R1, R2):
-                rr = r * min(1.0, (SPAN - MARGIN - ORB / 2 - WBUB / 2 - 4) / R2) * self.ease(self.t)
-                cr.set_line_width(26)
-                cr.set_source_rgba(0.75, 0.92, 1, 0.16 * self.t)
-                cr.arc(self.cx, self.cy, rr, -math.pi / 2 - 0.05, 0.05)
-                cr.stroke()
             for kind, obj, x, y, r in self.items:
                 hov = self.hover is not None and self.hover[1] is obj
                 self.draw_bubble(cr, x, y, r * (1.18 if hov else 1), kind, obj, (ar, ag, ab))
@@ -246,7 +243,20 @@ class Orbit(Gtk.Window):
             ext = cr.text_extents(str(n))
             cr.move_to(bx - ext.width / 2 - ext.x_bearing, by + ext.height / 2)
             cr.show_text(str(n))
+        self.update_shape()
         return False
+
+    def update_shape(self):
+        """Clip the window to the orb, the bubbles and the label, so there is
+        never a box around the launcher (even without a compositor)."""
+        circles = [(self.cx, self.cy, ORB / 2 + (18 if self.open else 4))]
+        circles += [(x, y, r * 1.2 + 4) for _k, _o, x, y, r in (self.items if self.t > 0 else [])]
+        circles.append((self.cx + ORB * .36, self.cy - ORB * .36, 12))          # window-count badge
+        rects = [self._label_rect] if getattr(self, "_label_rect", None) else []
+        key = (tuple((int(a), int(b), int(c)) for a, b, c in circles), tuple(tuple(int(v) for v in r) for r in rects))
+        if key != getattr(self, "_shape_key", None) and self.get_realized():
+            self._shape_key = key
+            self.shape_combine_region(shape_region(circles, rects))
 
     def count_windows(self):
         return len([w for w in self.screen.get_windows()
@@ -308,6 +318,7 @@ class Orbit(Gtk.Window):
         w, h = e.width + 18, 22
         lx = min(max(4, x - w / 2), self.size - w - 4)
         ly = y - r - h - 8 if y - r - h - 8 > 0 else y + r + 6
+        self._label_rect = (lx - 2, ly - 2, w + 4, h + 4)
         cr.set_source_rgba(.04, .16, .28, .75)
         self.rounded(cr, lx, ly, w, h, 11)
         cr.fill_preserve()
