@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Personalize
+Comment=Glass color, transparency and taskbar style
+Exec=frutiger-personalize
+Icon=preferences-desktop-theme
+Categories=Settings;DesktopSettings;XFCE;

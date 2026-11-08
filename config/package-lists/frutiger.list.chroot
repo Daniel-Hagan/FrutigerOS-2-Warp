@@ -1,0 +1,76 @@
+# Desktop
+xfce4
+xfce4-terminal
+xfce4-whiskermenu-plugin
+xfce4-pulseaudio-plugin
+xfce4-notifyd
+xfce4-screenshooter
+xfce4-taskmanager
+thunar
+thunar-archive-plugin
+thunar-volman
+mousepad
+ristretto
+xarchiver
+gvfs-backends
+policykit-1-gnome
+lightdm
+lightdm-gtk-greeter
+light-locker
+
+# Frutiger look & feel
+plank
+picom
+papirus-icon-theme
+dmz-cursor-theme
+fonts-noto-core
+fonts-noto-mono
+fonts-noto-color-emoji
+plymouth
+plymouth-themes
+grub-common
+os-prober
+
+# Third-party app theming: Qt 5/6, GTK 2, Flatpak
+qt5ct
+qt6ct
+gtk2-engines-murrine
+gtk2-engines-pixbuf
+flatpak
+xdg-desktop-portal-gtk
+
+# Sounds, cursors, fonts, screensaver, live wallpaper
+sound-theme-freedesktop
+gnome-session-canberra
+libcanberra-gtk3-module
+x11-apps
+xprintidle
+x11-utils
+curl
+unzip
+fonts-noto-ui-core
+
+# Orbit Launcher / Personalize runtime
+python3-gi
+python3-gi-cairo
+python3-cairo
+python3-pil
+python3-xlib
+gir1.2-gtk-3.0
+gir1.2-wnck-3.0
+dconf-cli
+x11-xserver-utils
+
+# Apps & hardware
+firefox-esr
+pipewire-audio
+pavucontrol
+network-manager-gnome
+blueman
+system-config-printer
+firmware-linux
+sudo
+
+# Installer (double-click "Install Frutiger OS" on the live desktop)
+calamares
+calamares-settings-debian

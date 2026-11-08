@@ -1,0 +1,1 @@
+DPkg::Post-Invoke { "if [ -x /usr/bin/frutiger-qt6-wrap ]; then /usr/bin/frutiger-qt6-wrap; fi"; };

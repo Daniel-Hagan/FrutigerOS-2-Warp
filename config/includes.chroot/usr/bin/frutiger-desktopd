@@ -1,0 +1,287 @@
+#!/usr/bin/env python3
+"""Frutiger OS desktop daemon (started at login by frutiger-session).
+
+Follows ~/.config/frutiger/desktop.ini (written by Personalize / Welcome Center)
+and re-reads it whenever it changes:
+
+  * wallpaper    static | time of day (Lagoon at dawn/day/sunset/night) | slideshow of the pack
+  * live effects bubbles rising and ripples drawn over the wallpaper (click-through layer)
+  * weather      optional: rain or snow over the wallpaper when it's raining/snowing in your
+                 city (Open-Meteo, no account; only contacted when this switch is on)
+  * screensaver  starts frutiger-screensaver after N idle minutes (never over fullscreen apps)
+  * sounds       turns event / click sounds on or off (Frutiger sound theme)
+Calm mode switches off everything that moves.
+"""
+import json, math, os, random, subprocess, sys, threading, time, urllib.parse, urllib.request
+sys.path.insert(0, "/usr/lib/frutiger")
+import frutiger_settings as fs
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gtk, Gdk, GLib
+import cairo
+
+CACHE = os.path.expanduser("~/.cache/frutiger/weather.json")
+RAIN = set(range(51, 68)) | set(range(80, 83)) | set(range(95, 100))
+SNOW = set(range(71, 78)) | {85, 86}
+
+
+def xfq(*args):
+    subprocess.run(["xfconf-query", *args], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def set_wallpaper(path):
+    out = subprocess.run(["xrandr", "--listmonitors"], capture_output=True, text=True).stdout.splitlines()[1:]
+    for line in out:
+        mon = line.split()[-1]
+        for ws in range(4):
+            base = f"/backdrop/screen0/monitor{mon}/workspace{ws}"
+            xfq("-c", "xfce4-desktop", "-p", base + "/last-image", "-n", "-t", "string", "-s", path)
+            xfq("-c", "xfce4-desktop", "-p", base + "/image-style", "-n", "-t", "int", "-s", "5")
+
+
+class Overlay(Gtk.Window):
+    """Click-through layer over the wallpaper: bubbles, ripples, rain, snow."""
+    def __init__(self):
+        super().__init__(type=Gtk.WindowType.TOPLEVEL)
+        self.set_title("Frutiger Live Wallpaper")
+        self.set_decorated(False)
+        self.set_type_hint(Gdk.WindowTypeHint.DESKTOP)
+        self.set_keep_below(True)
+        self.set_skip_taskbar_hint(True)
+        self.set_skip_pager_hint(True)
+        self.set_accept_focus(False)
+        self.stick()
+        self.set_app_paintable(True)
+        vis = self.get_screen().get_rgba_visual()
+        if vis:
+            self.set_visual(vis)
+        disp = Gdk.Display.get_default()
+        g = (disp.get_primary_monitor() or disp.get_monitor(0)).get_geometry()
+        self.W, self.H = g.width, g.height
+        self.move(g.x, g.y)
+        self.resize(self.W, self.H)
+        self.connect("draw", self.on_draw)
+        self.connect("realize", lambda *a: self.input_shape_combine_region(cairo.Region()))   # clicks go through
+        rnd = random.Random(5)
+        self.bubbles = [[rnd.random() * self.W, rnd.random() * self.H, 4 + rnd.random() * 26, 12 + rnd.random() * 30,
+                         rnd.random() * 6.28] for _ in range(18)]
+        self.drops = [[rnd.random() * self.W, rnd.random() * self.H, 500 + rnd.random() * 400] for _ in range(160)]
+        self.flakes = [[rnd.random() * self.W, rnd.random() * self.H, 1 + rnd.random() * 2.5, rnd.random() * 6.28] for _ in range(120)]
+        self.live = self.weather = None
+        self.t0 = time.monotonic()
+        self.last = time.monotonic()
+        self.timer = None
+
+    def configure(self, live, weather):
+        self.live, self.weather = live, weather
+        want = bool(live or weather)
+        if want and not self.get_visible():
+            self.show_all()
+        elif not want and self.get_visible():
+            self.hide()
+        if want and not self.timer:
+            self.timer = GLib.timeout_add(50, self.tick)            # 20 fps is plenty for a backdrop
+        elif not want and self.timer:
+            GLib.source_remove(self.timer)
+            self.timer = None
+
+    def tick(self):
+        now = time.monotonic()
+        dt, self.last = min(.1, now - self.last), now
+        for b in self.bubbles:
+            b[1] -= b[3] * dt
+            if b[1] < -40:
+                b[0], b[1] = random.random() * self.W, self.H + 30
+        for d in self.drops:
+            d[1] += d[2] * dt
+            d[0] -= d[2] * dt * .12
+            if d[1] > self.H:
+                d[0], d[1] = random.random() * (self.W + 200), -20
+        for f in self.flakes:
+            f[1] += 30 * f[2] * dt
+            f[3] += dt
+            if f[1] > self.H:
+                f[0], f[1] = random.random() * self.W, -10
+        self.queue_draw()
+        return True
+
+    def on_draw(self, _w, cr):
+        cr.set_operator(cairo.OPERATOR_SOURCE)
+        cr.set_source_rgba(0, 0, 0, 0)
+        cr.paint()
+        cr.set_operator(cairo.OPERATOR_OVER)
+        t = time.monotonic() - self.t0
+        if self.live:
+            for x, y, r, _sp, ph in self.bubbles:
+                x += math.sin(t * .8 + ph) * 6
+                g = cairo.RadialGradient(x - r * .35, y - r * .4, r * .05, x, y, r)
+                g.add_color_stop_rgba(0, 1, 1, 1, .85)
+                g.add_color_stop_rgba(.2, 1, 1, 1, .2)
+                g.add_color_stop_rgba(.7, .55, .86, 1, .08)
+                g.add_color_stop_rgba(.95, 1, 1, 1, .5)
+                g.add_color_stop_rgba(1, 1, 1, 1, 0)
+                cr.set_source(g)
+                cr.arc(x, y, r, 0, 2 * math.pi)
+                cr.fill()
+            wy = self.H * .87                                       # ripples on the lagoon's waterline
+            for k in range(3):
+                p = (t * .2 + k / 3) % 1
+                cx = self.W * (.25 + .25 * k)
+                cr.save()
+                cr.translate(cx, wy)
+                cr.scale(1, .18)
+                cr.arc(0, 0, 20 + p * 160, 0, 2 * math.pi)
+                cr.restore()
+                cr.set_source_rgba(1, 1, 1, .35 * (1 - p))
+                cr.set_line_width(1.5)
+                cr.stroke()
+        if self.weather == "rain":
+            cr.set_source_rgba(.85, .93, 1, .45)
+            cr.set_line_width(1.2)
+            for x, y, sp in self.drops:
+                cr.move_to(x, y)
+                cr.line_to(x - sp * .012, y + sp * .03)
+            cr.stroke()
+        elif self.weather == "snow":
+            cr.set_source_rgba(1, 1, 1, .85)
+            for x, y, s, ph in self.flakes:
+                cr.arc(x + math.sin(ph) * 8, y, s, 0, 2 * math.pi)
+                cr.fill()
+        return False
+
+
+class Daemon:
+    def __init__(self):
+        self.cfg, self.cfg_time = fs.load(), fs.mtime()
+        self.overlay = Overlay()
+        self.current_wall = None
+        self.slide_index = 0
+        self.slide_at = 0
+        self.weather_state = None       # None | "rain" | "snow" | "clear"
+        self.saver = None
+        self.apply()
+        GLib.timeout_add_seconds(3, self.watch_settings)
+        GLib.timeout_add_seconds(30, self.tick_wallpaper)
+        GLib.timeout_add_seconds(20, self.tick_idle)
+        GLib.timeout_add_seconds(20 * 60, self.fetch_weather_async)
+        self.fetch_weather_async()
+
+    # ---------- settings
+    def watch_settings(self):
+        m = fs.mtime()
+        if m != self.cfg_time:
+            self.cfg, self.cfg_time = fs.load(), m
+            self.apply()
+        return True
+
+    def apply(self):
+        c = self.cfg
+        xfq("-c", "xsettings", "-p", "/Net/EnableEventSounds", "-n", "-t", "bool", "-s", "true" if fs.on(c, "sounds") else "false")
+        xfq("-c", "xsettings", "-p", "/Net/EnableInputFeedbackSounds", "-n", "-t", "bool",
+            "-s", "true" if (fs.on(c, "sounds") and fs.on(c, "click_sounds")) else "false")
+        self.current_wall = None
+        self.tick_wallpaper()
+        self.refresh_overlay()
+        if fs.on(c, "weather_effects"):
+            self.fetch_weather_async()
+
+    def refresh_overlay(self):
+        w = self.weather_state if (fs.on(self.cfg, "weather_effects") and self.weather_state in ("rain", "snow")) else None
+        self.overlay.configure(fs.on(self.cfg, "live_effects"), w)
+
+    # ---------- wallpaper
+    def tick_wallpaper(self):
+        c, pack = self.cfg, fs.pack()
+        mode = c.get("wallpaper_mode", "timeofday")
+        if not fs.on(c, "wallpaper_dynamic") and mode != "static":
+            mode = "calm"
+        if mode == "timeofday":
+            name = fs.time_of_day(time.localtime().tm_hour)
+        elif mode == "slideshow" and pack:
+            names = sorted(pack)
+            mins = max(1, int(c.get("slideshow_minutes", "15") or 15))
+            if time.time() >= self.slide_at:
+                self.slide_index = (self.slide_index + 1) % len(names)
+                self.slide_at = time.time() + mins * 60
+            name = names[self.slide_index]
+        elif mode == "calm":
+            name = "lagoon-day"
+        else:
+            name = c.get("wallpaper", "lagoon-day")
+        path = pack.get(name) or os.path.join(fs.BG, "lagoon.png")
+        if path != self.current_wall:
+            set_wallpaper(path)
+            self.current_wall = path
+        return True
+
+    # ---------- weather (only when the user turned it on)
+    def fetch_weather_async(self):
+        if fs.on(self.cfg, "weather_effects") or (fs.on(self.cfg, "gadgets") and fs.on(self.cfg, "gadget_weather")):
+            if self.cfg.get("weather_city"):
+                threading.Thread(target=self.fetch_weather, daemon=True).start()
+        return True
+
+    def fetch_weather(self):
+        c = dict(self.cfg)
+        try:
+            lat, lon = c.get("weather_lat"), c.get("weather_lon")
+            if not (lat and lon):
+                q = urllib.parse.urlencode({"name": c["weather_city"], "count": 1})
+                with urllib.request.urlopen("https://geocoding-api.open-meteo.com/v1/search?" + q, timeout=10) as r:
+                    res = json.load(r).get("results") or []
+                if not res:
+                    return
+                lat, lon = res[0]["latitude"], res[0]["longitude"]
+                c["weather_lat"], c["weather_lon"] = str(lat), str(lon)
+                fs.save(c)
+            q = urllib.parse.urlencode({"latitude": lat, "longitude": lon, "current": "temperature_2m,weather_code,is_day",
+                                        "temperature_unit": "fahrenheit" if os.environ.get("LANG", "").startswith("en_US") else "celsius"})
+            with urllib.request.urlopen("https://api.open-meteo.com/v1/forecast?" + q, timeout=10) as r:
+                cur = json.load(r)["current"]
+            os.makedirs(os.path.dirname(CACHE), exist_ok=True)
+            cur["city"] = c.get("weather_city")
+            cur["unit"] = "°F" if os.environ.get("LANG", "").startswith("en_US") else "°C"
+            json.dump(cur, open(CACHE, "w"))
+            code = int(cur.get("weather_code", 0))
+            state = "rain" if code in RAIN else "snow" if code in SNOW else "clear"
+            GLib.idle_add(self.set_weather, state)
+        except Exception as e:
+            print("weather:", e, file=sys.stderr)
+
+    def set_weather(self, state):
+        self.weather_state = state
+        self.refresh_overlay()
+        return False
+
+    # ---------- screensaver
+    def tick_idle(self):
+        if not fs.on(self.cfg, "screensaver"):
+            return True
+        if self.saver and self.saver.poll() is None:
+            return True
+        try:
+            idle_ms = int(subprocess.run(["xprintidle"], capture_output=True, text=True).stdout.strip() or 0)
+        except (OSError, ValueError):
+            return True
+        mins = max(1, int(self.cfg.get("screensaver_minutes", "10") or 10))
+        if idle_ms >= mins * 60000 and not self.fullscreen_active():
+            args = ["frutiger-screensaver"] + (["--calm"] if self.cfg.get("calm_mode") == "on" else [])
+            self.saver = subprocess.Popen(args)
+        return True
+
+    @staticmethod
+    def fullscreen_active():
+        try:
+            out = subprocess.run(["xprop", "-root", "_NET_ACTIVE_WINDOW"], capture_output=True, text=True).stdout
+            wid = out.strip().split()[-1]
+            st = subprocess.run(["xprop", "-id", wid, "_NET_WM_STATE"], capture_output=True, text=True).stdout
+            return "_NET_WM_STATE_FULLSCREEN" in st
+        except Exception:
+            return False
+
+
+if __name__ == "__main__":
+    GLib.set_prgname("frutiger-desktopd")
+    Daemon()
+    Gtk.main()

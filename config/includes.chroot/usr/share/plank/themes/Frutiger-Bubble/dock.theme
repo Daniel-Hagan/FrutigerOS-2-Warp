@@ -1,0 +1,34 @@
+# Frutiger Bubble — glass shelf for Plank (the Bubble Dock).
+# Colors are R;;G;;B;;A (0-255). frutiger-personalize writes a tinted copy.
+[PlankTheme]
+TopRoundness=14
+BottomRoundness=14
+LineWidth=1
+OuterStrokeColor=0;;30;;60;;170
+FillStartColor=255;;255;;255;;165
+FillEndColor=42;;167;;232;;115
+InnerStrokeColor=255;;255;;255;;190
+
+[PlankDockTheme]
+HorizPadding=6
+TopPadding=-10
+BottomPadding=4
+ItemPadding=10
+IndicatorSize=5
+IconShadowSize=3
+UrgentBounceHeight=1.6667
+LaunchBounceHeight=0.625
+FadeOpacity=1
+ClickTime=300
+UrgentBounceTime=600
+LaunchBounceTime=600
+ActiveTime=300
+SlideTime=300
+FadeTime=250
+HideTime=150
+GlowSize=30
+GlowTime=10000
+GlowPulseTime=2000
+UrgentHueShift=150
+ItemMoveTime=450
+CascadeHide=true

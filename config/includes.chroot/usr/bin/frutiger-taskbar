@@ -1,0 +1,55 @@
+#!/bin/sh
+# frutiger-taskbar STYLE — switch the taskbar style live.
+#   dock      Bubble Dock          (Plank, glass shelf)
+#   orbit     Orbit Launcher       (corner orb; apps and windows fan out)
+#   aquarium  Aquarium Rail        (water strip; running apps swim as koi)
+#   leaf      Leaf Shelf           (glass branch; a leaf per app)
+#   cloud     Cloud Bar            (clouds drift along the top edge)
+#   beads     Glass Bead String    (glass marbles hanging across the bottom)
+#   ribbon    Aurora Ribbon        (icons ride a flowing ribbon of light)
+#   sundial   Sundial Clock        (apps are the hour markers of a corner clock)
+#   pond      Lily Pond            (lily pads in a corner pond; running apps bloom)
+#   sidebar   Vista Sidebar        (glass column on the right with gadgets)
+#   flip      Flip 3D Carousel     (nothing on screen; Super or bottom-left corner)
+#   classic   Classic taskbar      (Aero bar with the Start orb)
+# In every style except classic, the Xfce panel (tray, volume, clock) auto-hides
+# along the top edge (for Cloud Bar, which owns the top, it hides at the bottom).
+mode="${1:-dock}"
+P=/panels/panel-1
+U=$(id -u)
+STYLES="dock orbit aquarium leaf cloud beads ribbon sundial pond sidebar flip classic"
+case " $STYLES " in *" $mode "*) ;; *)
+  echo "usage: frutiger-taskbar {$(echo $STYLES | tr ' ' '|')}" >&2; exit 1 ;; esac
+mkdir -p "$HOME/.config/frutiger"
+echo "$mode" > "$HOME/.config/frutiger/taskbar"
+
+pkill -u "$U" -x plank 2>/dev/null
+for p in orbit aquarium leafshelf cloudbar beads ribbon sundial lilypond sidebar flip; do
+  pkill -u "$U" -f "/usr/bin/frutiger-$p" 2>/dev/null
+done
+
+panel() {  # panel <p=position> <autohide 0|2>
+  xfconf-query -c xfce4-panel -p $P/position -s "$1;x=0;y=0"
+  xfconf-query -c xfce4-panel -p $P/autohide-behavior -s "$2"
+}
+super_key() {  # what a lone press of the Super key does
+  xfconf-query -c xfce4-keyboard-shortcuts -p /commands/custom/Super_L -n -t string -s "$1"
+  xfconf-query -c xfce4-keyboard-shortcuts -p /commands/custom/Super_R -n -t string -s "$1"
+}
+start() { setsid "$@" >/dev/null 2>&1 & }
+
+super_key xfce4-popup-whiskermenu
+case "$mode" in
+  dock)     panel p=6 2; start plank ;;
+  orbit)    panel p=6 2; start /usr/bin/frutiger-orbit ;;
+  aquarium) panel p=6 2; start /usr/bin/frutiger-aquarium ;;
+  leaf)     panel p=6 2; start /usr/bin/frutiger-leafshelf ;;
+  cloud)    panel p=8 2; start /usr/bin/frutiger-cloudbar ;;
+  beads)    panel p=6 2; start /usr/bin/frutiger-beads ;;
+  ribbon)   panel p=6 2; start /usr/bin/frutiger-ribbon ;;
+  sundial)  panel p=6 2; start /usr/bin/frutiger-sundial ;;
+  pond)     panel p=6 2; start /usr/bin/frutiger-lilypond ;;
+  sidebar)  panel p=6 2; start /usr/bin/frutiger-sidebar ;;
+  flip)     panel p=6 2; super_key "frutiger-flip --show"; start /usr/bin/frutiger-flip ;;
+  classic)  panel p=8 0 ;;
+esac

@@ -1,0 +1,16 @@
+favorites=firefox-esr.desktop,thunar.desktop,xfce4-terminal.desktop,org.xfce.mousepad.desktop,org.xfce.ristretto.desktop,frutiger-personalize.desktop
+button-icon=/usr/share/frutiger/start-orb.png
+button-single-row=false
+show-button-title=false
+show-button-icon=true
+launcher-show-name=true
+launcher-show-description=true
+item-icon-size=3
+category-icon-size=1
+view-mode=1
+position-search-alternate=true
+position-commands-alternate=true
+position-categories-alternate=false
+menu-width=440
+menu-height=540
+menu-opacity=100

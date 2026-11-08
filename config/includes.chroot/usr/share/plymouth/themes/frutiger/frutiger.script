@@ -1,0 +1,128 @@
+# Frutiger OS boot splash (Plymouth script module)
+# Sky-and-water background, logo floating in an Aero glass bubble,
+# small bubbles rising, and five glowing orbs as the progress indicator.
+
+W = Window.GetWidth();
+H = Window.GetHeight();
+Window.SetBackgroundTopColor(0.12, 0.56, 0.88);
+Window.SetBackgroundBottomColor(0.04, 0.37, 0.60);
+
+# ---- background, scaled to cover the screen ----
+bg_raw = Image("background.png");
+scale = Math.Max(W / bg_raw.GetWidth(), H / bg_raw.GetHeight());
+bg_img = bg_raw.Scale(Math.Int(bg_raw.GetWidth() * scale), Math.Int(bg_raw.GetHeight() * scale));
+bg = Sprite(bg_img);
+bg.SetX(Math.Int((W - bg_img.GetWidth()) / 2));
+bg.SetY(Math.Int((H - bg_img.GetHeight()) / 2));
+bg.SetZ(-100);
+
+# ---- rising bubbles ----
+small = Image("bubble-small.png");
+NB = 14;
+for (i = 0; i < NB; i++) {
+  size = 12 + Math.Int(Math.Random() * 28);
+  bubimg[i] = small.Scale(size, size);
+  bub[i] = Sprite(bubimg[i]);
+  bubx[i] = Math.Random() * W;
+  buby[i] = H * 0.5 + Math.Random() * H * 0.6;
+  bubv[i] = 0.4 + Math.Random() * 1.1;
+  bub[i].SetOpacity(0.35 + Math.Random() * 0.6);
+  bub[i].SetZ(-10);
+}
+
+# ---- logo bubble ----
+logo_raw = Image("bubble.png");
+lsize = Math.Int(Math.Min(W, H) * 0.30);
+logo_img = logo_raw.Scale(lsize, lsize);
+logo = Sprite(logo_img);
+logo_x = Math.Int(W / 2 - lsize / 2);
+logo_y = Math.Int(H * 0.40 - lsize / 2);
+logo.SetX(logo_x);
+logo.SetY(logo_y);
+logo.SetZ(10);
+
+# ---- wordmark ----
+title_img = Image.Text("Frutiger OS", 1, 1, 1, 1, "Sans 28");
+title = Sprite(title_img);
+title.SetX(Math.Int(W / 2 - title_img.GetWidth() / 2));
+title.SetY(logo_y + lsize + 4);
+title.SetZ(10);
+
+# ---- progress orbs ----
+on_img = Image("orb-on.png");
+off_img = Image("orb-off.png");
+for (i = 0; i < 5; i++) {
+  orb[i] = Sprite(off_img);
+  orb[i].SetX(Math.Int(W / 2 - 62 + i * 26));
+  orb[i].SetY(logo_y + lsize + 4 + title_img.GetHeight() + 22);
+  orb[i].SetZ(10);
+}
+
+t = 0;
+fun refresh_callback() {
+  t++;
+  # bob the logo bubble
+  logo.SetY(logo_y + Math.Int(Math.Sin(t * 0.035) * 8));
+  # rising bubbles with a little sideways wobble
+  for (i = 0; i < NB; i++) {
+    buby[i] = buby[i] - bubv[i];
+    if (buby[i] < -50) {
+      buby[i] = H + 20;
+      bubx[i] = Math.Random() * W;
+    }
+    bub[i].SetX(Math.Int(bubx[i] + Math.Sin(t * 0.02 + i) * 10));
+    bub[i].SetY(Math.Int(buby[i]));
+  }
+  # one orb lit at a time, sweeping left to right
+  lit = Math.Int(t / 9) % 5;
+  for (i = 0; i < 5; i++) {
+    if (i == lit) {
+      orb[i].SetImage(on_img);
+    } else {
+      orb[i].SetImage(off_img);
+    }
+  }
+}
+Plymouth.SetRefreshFunction(refresh_callback);
+
+# ---- disk-encryption password prompt (installed systems) ----
+prompt_sprite = Sprite();
+bullets_sprite = Sprite();
+fun display_password_callback(prompt, bullets) {
+  p = Image.Text(prompt, 1, 1, 1, 1, "Sans 14");
+  prompt_sprite.SetImage(p);
+  prompt_sprite.SetX(Math.Int(W / 2 - p.GetWidth() / 2));
+  prompt_sprite.SetY(Math.Int(H * 0.78));
+  prompt_sprite.SetZ(20);
+  s = "";
+  for (i = 0; i < bullets; i++) {
+    s = s + "●";
+  }
+  b = Image.Text(s + " ", 1, 1, 1, 1, "Sans 18");
+  bullets_sprite.SetImage(b);
+  bullets_sprite.SetX(Math.Int(W / 2 - b.GetWidth() / 2));
+  bullets_sprite.SetY(Math.Int(H * 0.78) + 30);
+  bullets_sprite.SetZ(20);
+}
+fun display_normal_callback() {
+  prompt_sprite.SetOpacity(0);
+  bullets_sprite.SetOpacity(0);
+}
+fun display_password_wrapper(prompt, bullets) {
+  prompt_sprite.SetOpacity(1);
+  bullets_sprite.SetOpacity(1);
+  display_password_callback(prompt, bullets);
+}
+Plymouth.SetDisplayPasswordFunction(display_password_wrapper);
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+
+# ---- status messages (e.g. "Checking disks") ----
+msg_sprite = Sprite();
+fun message_callback(text) {
+  m = Image.Text(text, 1, 1, 1, 1, "Sans 12");
+  msg_sprite.SetImage(m);
+  msg_sprite.SetX(Math.Int(W / 2 - m.GetWidth() / 2));
+  msg_sprite.SetY(H - 40);
+  msg_sprite.SetZ(20);
+}
+Plymouth.SetMessageFunction(message_callback);

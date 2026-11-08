@@ -1,0 +1,237 @@
+/* Frutiger-Aero GTK 3 theme
+ * Built on Adwaita (always present in GTK 3) with glossy Aero-style overrides.
+ * Change the glass tint by editing @define-color accent below. */
+@import url("resource:///org/gtk/libgtk/theme/Adwaita/gtk-contained.css");
+
+@define-color accent        #2aa7e8;
+@define-color accent_dark   #0a5ea8;
+@define-color sky_top       #f6fbff;
+@define-color sky_bottom    #dfeefa;
+@define-color ink           #10223a;
+@define-color theme_selected_bg_color #3399ff;
+@define-color theme_selected_fg_color #ffffff;
+@define-color theme_bg_color #f2f7fc;
+@define-color theme_fg_color @ink;
+
+* { -gtk-outline-radius: 3px; }
+
+window, .background { background-color: @theme_bg_color; color: @ink; }
+
+/* ---------- Header bars & CSD title bars: Aero glass ---------- */
+headerbar, .titlebar:not(headerbar) {
+  min-height: 34px;
+  padding: 0 6px;
+  border: none;
+  border-bottom: 1px solid alpha(#002244, .45);
+  background-image: linear-gradient(to bottom,
+      alpha(white, .70) 0%, alpha(white, .25) 49%,
+      alpha(@accent, .30) 50%, alpha(@accent, .55) 100%);
+  background-color: alpha(@accent, .45);
+  box-shadow: inset 0 1px alpha(white, .8);
+  color: @ink;
+}
+headerbar:backdrop { background-color: alpha(#c8d4e0, .55); }
+headerbar .title { font-weight: normal; text-shadow: 0 0 6px white, 0 0 3px white; }
+headerbar button.titlebutton {
+  min-width: 26px; min-height: 18px; padding: 0; margin: 0 1px;
+  border-radius: 0 0 4px 4px; border: 1px solid alpha(#002244, .55);
+  background-image: linear-gradient(to bottom, alpha(white,.6), alpha(white,.15) 50%, transparent 51%, alpha(white,.25));
+  color: white; -gtk-icon-shadow: 0 0 2px black;
+}
+headerbar button.titlebutton:hover { background-image: linear-gradient(to bottom, #bfe6ff, #5fb6ee 50%, #2a8fd8 51%, #66ccff); }
+headerbar button.titlebutton.close {
+  min-width: 42px;
+  background-image: linear-gradient(to bottom, #e8a493, #cf6a55 50%, #b93a22 51%, #d97a58);
+}
+headerbar button.titlebutton.close:hover {
+  background-image: linear-gradient(to bottom, #ffb6a0, #f06a4e 50%, #e0300f 51%, #ff8d5e);
+  box-shadow: 0 0 10px #ff5a2a;
+}
+
+/* ---------- Buttons: glossy two-tone ---------- */
+button {
+  border-radius: 3px;
+  border: 1px solid #7a9dbf;
+  background-image: linear-gradient(to bottom, #fbfdff 0%, #e6eef6 49%, #d6e2ee 50%, #e8f0f8 100%);
+  box-shadow: inset 0 0 0 1px alpha(white, .8);
+  color: @ink; text-shadow: none;
+}
+button:hover {
+  border-color: #3c8ed8;
+  background-image: linear-gradient(to bottom, #f4fbff 0%, #d4ecfd 49%, #b6dcf9 50%, #d0ecff 100%);
+}
+button:active, button:checked {
+  border-color: #2c628b;
+  background-image: linear-gradient(to bottom, #e5f4fc 0%, #c4e5f6 49%, #98d1ef 50%, #68b3db 100%);
+  box-shadow: inset 0 1px 2px alpha(black, .3);
+}
+button.suggested-action {
+  color: white; border-color: #1f5f9a; text-shadow: 0 1px 1px alpha(black,.4);
+  background-image: linear-gradient(to bottom, #8fd3ff, #3aa0e8 49%, #1a7fd0 50%, #42b0ff);
+}
+button.destructive-action {
+  color: white; border-color: #8a2a14;
+  background-image: linear-gradient(to bottom, #f0a090, #d8604a 49%, #c03a20 50%, #e07a58);
+}
+button.flat { border-color: transparent; background-image: none; box-shadow: none; }
+button.flat:hover { border-color: #7fb4e3; background-image: linear-gradient(to bottom, #fafdff, #d8ecfc 50%, #c4e1fa 51%, #dcefff); }
+
+/* ---------- Entries ---------- */
+entry {
+  border-radius: 2px; border: 1px solid #8fb0d0; background-color: white;
+  box-shadow: inset 0 1px 2px alpha(black, .08);
+}
+entry:focus { border-color: #3399ff; box-shadow: inset 0 0 0 1px alpha(#3399ff, .35); }
+
+/* ---------- Selection: the classic Aero highlight ---------- */
+selection, *:selected, row:selected, treeview.view:selected, iconview:selected, flowboxchild:selected {
+  color: @ink;
+  background-color: #cce8ff;
+  background-image: linear-gradient(to bottom, #e5f3ff, #c4e2ff);
+  border: 1px solid #84acdd;
+}
+row:hover:not(:selected), treeview.view:hover:not(:selected) { background-color: #e5f3fb; }
+entry selection, textview text selection, label selection { background-image: none; background-color: #3399ff; color: white; border: none; }
+
+/* ---------- Toolbars / command bars ---------- */
+toolbar, .primary-toolbar, .inline-toolbar, actionbar, searchbar {
+  background-image: linear-gradient(to bottom, @sky_top, @sky_bottom 50%, #d0e5f6 51%, #e3f0fb);
+  border-bottom: 1px solid #a9c6e2;
+}
+
+/* ---------- Sidebars (Thunar / file chooser places) ---------- */
+.sidebar, placessidebar, placessidebar list, stacksidebar list {
+  background-color: transparent;
+  background-image: linear-gradient(to right, #f4f9fe, #e7f1fb);
+  border-right: 1px solid #c9dcee;
+}
+
+/* ---------- Menus & popovers ---------- */
+menu, .menu, .context-menu, popover.menu, popover {
+  background-color: #f2f6fa; border: 1px solid #97a5b5; padding: 2px;
+  box-shadow: 3px 3px 6px alpha(black, .3);
+}
+menu menuitem, .menu menuitem { padding: 4px 18px 4px 24px; border-radius: 3px; border: 1px solid transparent; }
+menu menuitem:hover, .menu menuitem:hover {
+  color: @ink; border-color: #aeccef; background-image: linear-gradient(to bottom, #f1f8ff, #dcebfd);
+}
+menubar { background-image: linear-gradient(to bottom, #f5faff, #dbe9f7); }
+
+/* ---------- Tooltips ---------- */
+tooltip, tooltip.background {
+  background-color: #f8fbff; background-image: linear-gradient(to bottom, white, #e4ecf7);
+  border: 1px solid #76808c; border-radius: 3px; color: #2a3a4a; text-shadow: none;
+}
+tooltip * { color: #2a3a4a; }
+
+/* ---------- Progress & sliders: green glossy meter ---------- */
+progressbar progress, levelbar block.filled {
+  border-radius: 2px; border: 1px solid #2a8a1a;
+  background-image: linear-gradient(to bottom, #c8ffb0, #5fd23a 50%, #2ea318 51%, #7ee05a);
+}
+progressbar trough, levelbar trough { background-color: #e6e6e6; border: 1px solid #a0a0a0; border-radius: 2px; }
+scale highlight { background-image: linear-gradient(to bottom, #8fd3ff, #2a8fd8); }
+scale slider {
+  border: 1px solid #3c7fb1;
+  background-image: radial-gradient(circle at 50% 30%, white, #b8dcff 60%, #6fb2e8);
+}
+
+/* ---------- Scrollbars ---------- */
+scrollbar slider {
+  min-width: 9px; min-height: 9px; border-radius: 3px; border: 1px solid #9ab0c6;
+  background-image: linear-gradient(to right, #f4f8fc, #dbe5ef);
+}
+scrollbar slider:hover { border-color: #3c8ed8; background-image: linear-gradient(to right, #eaf6fd, #b8dcf6); }
+
+/* ---------- Notebooks / tabs ---------- */
+notebook > header tab { border-radius: 3px 3px 0 0; padding: 4px 12px; }
+notebook > header tab:checked {
+  background-image: linear-gradient(to bottom, white, #f0f7ff);
+  box-shadow: inset 0 2px @accent;
+}
+
+/* ---------- Check & radio: glossy blue ---------- */
+check:checked, radio:checked {
+  color: white; border-color: #1f5f9a;
+  background-image: linear-gradient(to bottom, #8fd3ff, #3aa0e8 49%, #1a7fd0 50%, #42b0ff);
+}
+switch:checked { background-image: linear-gradient(to bottom, #8fd3ff, #1a7fd0); border-color: #1f5f9a; }
+
+/* =========================================================
+ * Xfce panel (classic taskbar mode): translucent glass bar
+ * ========================================================= */
+.xfce4-panel {
+  background-color: alpha(@accent, .38);
+  background-image: linear-gradient(to bottom,
+      alpha(white, .55) 0%, alpha(white, .15) 48%, transparent 50%, alpha(white, .12) 100%);
+  border-top: 1px solid alpha(white, .65);
+  color: white;
+}
+.xfce4-panel label, .xfce4-panel .tasklist label { color: white; text-shadow: 0 0 4px black, 0 0 2px black; }
+.xfce4-panel button {
+  border-radius: 4px; border: 1px solid transparent; background-image: none; box-shadow: none; color: white;
+}
+.xfce4-panel button:hover {
+  border-color: alpha(white, .45);
+  background-image: linear-gradient(to bottom, alpha(white,.5), alpha(white,.2) 50%, alpha(#96dcff,.2) 51%, alpha(#96dcff,.45));
+}
+.xfce4-panel .tasklist button {
+  border-color: alpha(white, .35);
+  background-image: linear-gradient(to bottom, alpha(white,.30), alpha(white,.08) 50%, transparent 51%, alpha(white,.10));
+  box-shadow: inset 0 0 0 1px alpha(black, .25);
+}
+.xfce4-panel .tasklist button:checked {
+  background-image: linear-gradient(to bottom, alpha(white,.55), alpha(white,.25) 50%, alpha(#78c8ff,.35) 51%, alpha(#a0e6ff,.6));
+  box-shadow: inset 0 0 8px alpha(white, .6), inset 0 0 0 1px alpha(black, .25);
+}
+/* Start orb button (whiskermenu): no frame, just the orb image with a glow */
+.xfce4-panel #whiskermenu-button { padding: 0 2px; border: none; background-image: none; }
+.xfce4-panel #whiskermenu-button:hover { background-image: none; box-shadow: none; -gtk-icon-effect: highlight; }
+
+/* Whisker menu = Start menu */
+#whiskermenu-window {
+  background-color: alpha(@accent, .55);
+  background-image: linear-gradient(to bottom, alpha(white,.55), alpha(white,.15) 18%, transparent 20%);
+  border: 1px solid alpha(white, .7); border-radius: 8px;
+}
+#whiskermenu-window treeview, #whiskermenu-window scrolledwindow { background-color: white; border-radius: 3px; }
+#whiskermenu-window entry { font-style: italic; }
+#whiskermenu-window button { color: white; text-shadow: 0 0 4px black; background-image: none; border-color: transparent; }
+#whiskermenu-window button:hover { border-color: alpha(white,.6); background-image: linear-gradient(to bottom, alpha(white,.35), alpha(white,.1)); }
+
+/* Desktop icon labels */
+XfdesktopIconView.view { background-color: transparent; color: white; text-shadow: 0 1px 3px black; }
+XfdesktopIconView.view:selected { background-image: linear-gradient(to bottom, alpha(#96d2ff,.5), alpha(#5aaaf0,.35)); border: 1px solid alpha(#c8ebff,.8); border-radius: 4px; }
+
+/* Plank docklets use GTK tooltips; keep them readable */
+.plank-dock tooltip { border-radius: 10px; background-color: alpha(#0a2846, .75); background-image: none; border: 1px solid alpha(white,.5); }
+.plank-dock tooltip * { color: white; }
+
+/* ===== Alt+Tab: glass window switcher (xfwm4 tabwin) ===== */
+#xfwm-tabwin {
+  border-radius: 12px;
+  padding: 14px;
+  border: 1px solid alpha(white, .8);
+  background-color: alpha(@accent, .45);
+  background-image: linear-gradient(to bottom, alpha(white, .6) 0%, alpha(white, .2) 45%, alpha(white, .06) 47%, alpha(white, .22) 100%);
+  box-shadow: 0 10px 30px alpha(#00203f, .5);
+  color: #0b1d33;
+}
+#xfwm-tabwin button {
+  border-radius: 8px; border: 1px solid transparent; background-image: none; box-shadow: none; padding: 6px;
+}
+#xfwm-tabwin button:checked, #xfwm-tabwin button:hover {
+  border-color: alpha(white, .9);
+  background-image: radial-gradient(circle at 50% 30%, alpha(white, .85), alpha(#bfe6ff, .45) 60%, alpha(white, .2));
+  box-shadow: 0 0 12px alpha(#9fe6ff, .9);
+}
+#xfwm-tabwin label { color: #0b1d33; text-shadow: 0 0 6px white; font-weight: bold; }
+
+/* ===== Thunar: Explorer-style breadcrumb bar ===== */
+.path-bar button, #ThunarLocationButtons button {
+  border-radius: 0; border-color: transparent; background-image: none; box-shadow: none; padding: 2px 8px;
+}
+.path-bar button:hover, #ThunarLocationButtons button:hover {
+  border-color: #7fb4e3; background-image: linear-gradient(to bottom, #fafdff, #d8ecfc 50%, #c4e1fa 51%, #dcefff);
+}
+.path-bar button:checked, #ThunarLocationButtons button:checked { font-weight: bold; background-image: none; }

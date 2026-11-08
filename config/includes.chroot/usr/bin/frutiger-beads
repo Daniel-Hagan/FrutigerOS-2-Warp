@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""Frutiger OS — Glass Bead String taskbar.
+
+A strand of glass marbles hangs across the bottom of the screen, one per app.
+Beads swing when the pointer brushes past them (simple pendulum physics) and
+running apps glow from inside; the active window's bead has a bright halo.
+"""
+import colorsys, math, sys
+sys.path.insert(0, "/usr/lib/frutiger")
+from frutiger_strip import Strip, run, cairo
+
+THREAD = 14     # length of the thread from the string to the bead
+BEAD_R = 21
+
+
+class Beads(Strip):
+    TITLE = "Frutiger Bead String"
+    PRGNAME = "frutiger-beads"
+    STRIP_H = 72
+    EXTRA_H = 40
+    item_radius = BEAD_R
+
+    def __init__(self):
+        self.swing = {}          # key -> [angle, velocity]
+        self.last_px = None
+        super().__init__()
+
+    def string_y(self, x):
+        w = self.W
+        u = (x - 70) / max(1, w - 180)                    # gentle sag across the screen
+        return self.top + 12 + math.sin(min(1, max(0, u)) * math.pi) * 6
+
+    def draw_background(self, cr, w, h, top, t):
+        cr.move_to(70, self.string_y(70))
+        for x in range(70, w - 110, 12):
+            cr.line_to(x, self.string_y(x))
+        cr.set_source_rgba(1, 1, 1, .85)
+        cr.set_line_width(1.6)
+        cr.stroke()
+        for x in (70, w - 110):                           # little glass end-caps
+            cr.arc(x, self.string_y(x), 4, 0, 2 * math.pi)
+            cr.set_source_rgba(1, 1, 1, .9)
+            cr.fill()
+
+    def anchor(self, i, n):
+        x0, x1 = 100, self.W - 140
+        step = min(64, (x1 - x0) / max(1, n))
+        x = x0 + step * (i + .5)
+        return x, self.string_y(x)
+
+    def item_pos(self, i, n, it, w, top, t):
+        ax, ay = self.anchor(i, n)
+        a = self.swing.get(it.key, [0, 0])[0]
+        return ax + math.sin(a) * (THREAD + BEAD_R), ay + math.cos(a) * (THREAD + BEAD_R)
+
+    def tick(self):
+        dt = 1 / self.FPS                                 # pendulum: a'' = -k a - c a'
+        for k, s in self.swing.items():
+            s[1] += (-38 * s[0] - 2.4 * s[1]) * dt
+            s[0] += s[1] * dt
+        return super().tick()
+
+    def on_motion(self, w, ev):
+        if self.last_px is not None:
+            vx = ev.x - self.last_px
+            for it in self.items:
+                if it.key in self.pos:
+                    bx, by = self.pos[it.key]
+                    if abs(ev.x - bx) < BEAD_R + 6 and abs(ev.y - by) < BEAD_R + 14:
+                        s = self.swing.setdefault(it.key, [0, 0])
+                        s[1] += max(-3, min(3, vx * .08))
+        self.last_px = ev.x
+        return super().on_motion(w, ev)
+
+    def draw_item(self, cr, it, x, y, t, hover):
+        i = self.items.index(it)
+        ax, ay = self.anchor(i, len(self.items))
+        cr.move_to(ax, ay)                                # thread
+        cr.line_to(x, y - BEAD_R)
+        cr.set_source_rgba(1, 1, 1, .7)
+        cr.set_line_width(1)
+        cr.stroke()
+        hue = it.seed
+        r, g, b = colorsys.hls_to_rgb(hue, .55, .75)
+        a = 1.0 if it.running else .55
+        if it.running:                                    # inner glow
+            gl = cairo.RadialGradient(x, y, 2, x, y, BEAD_R + (14 if it.active else 8))
+            pulse = (.6 + .4 * math.sin(t * 4)) if it.attention else 1
+            gl.add_color_stop_rgba(0, r, g, b, .55 * pulse)
+            gl.add_color_stop_rgba(1, r, g, b, 0)
+            cr.set_source(gl)
+            cr.arc(x, y, BEAD_R + 14, 0, 2 * math.pi)
+            cr.fill()
+        body = cairo.RadialGradient(x - 6, y - 8, 2, x, y, BEAD_R)
+        body.add_color_stop_rgba(0, 1, 1, 1, .95 * a)
+        body.add_color_stop_rgba(.35, r, g, b, .45 * a)
+        body.add_color_stop_rgba(.9, r * .7, g * .7, b * .7, .75 * a)
+        body.add_color_stop_rgba(1, 1, 1, 1, .8 * a)
+        cr.arc(x, y, BEAD_R, 0, 2 * math.pi)
+        cr.set_source(body)
+        cr.fill_preserve()
+        cr.set_source_rgba(1, 1, 1, .9 * a)
+        cr.set_line_width(1.2)
+        cr.stroke()
+        self.paint_icon(cr, it, x, y + 1, 22, max(a, .75))
+        cr.save()                                         # specular highlight
+        cr.translate(x - 6, y - 11)
+        cr.scale(1, .55)
+        cr.arc(0, 0, 8, 0, 2 * math.pi)
+        cr.restore()
+        cr.set_source_rgba(1, 1, 1, .7)
+        cr.fill()
+        if it.active:
+            cr.arc(x, y, BEAD_R + 3, 0, 2 * math.pi)
+            cr.set_source_rgba(.75, .95, 1, .95)
+            cr.set_line_width(2)
+            cr.stroke()
+
+
+if __name__ == "__main__":
+    run(Beads)

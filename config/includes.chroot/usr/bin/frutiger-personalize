@@ -1,0 +1,372 @@
+#!/usr/bin/env python3
+"""Frutiger OS — Personalize.
+
+Appearance: glass color, intensity, Aero blur, app icons.
+Taskbar:    the twelve taskbar styles ("Try it" switches without closing).
+Desktop:    wallpaper (static / time of day / slideshow), live effects, weather,
+            desktop gadgets (each one), sounds, screensaver, window effects and
+            Calm mode (turns off everything that moves).
+"""
+import os, re, shutil, subprocess, sys
+sys.path.insert(0, "/usr/lib/frutiger")
+import frutiger_settings as fs
+import gi
+gi.require_version("Gtk", "3.0")
+from gi.repository import Gtk, Gdk, GdkPixbuf
+
+HOME = os.path.expanduser("~")
+CONF = os.path.join(HOME, ".config/frutiger")
+SWATCHES = ["#2aa7e8", "#20c4b8", "#5fcf3a", "#a8d82a", "#f0b42a",
+            "#f06a8a", "#a46ae8", "#6a7ee8", "#8a9aaa", "#2a4a6a"]
+STYLES = [("dock", "Bubble Dock", "Glass shelf of bubbles that swell under the pointer"),
+          ("orbit", "Orbit Launcher", "A corner orb; apps and windows fan out around it"),
+          ("aquarium", "Aquarium Rail", "A strip of water; running apps swim by as koi"),
+          ("leaf", "Leaf Shelf", "A glass branch that grows a leaf for each app"),
+          ("cloud", "Cloud Bar", "Clouds drift along the top edge; the active one is sunlit"),
+          ("beads", "Glass Bead String", "Glass marbles hanging across the bottom; running ones glow"),
+          ("ribbon", "Aurora Ribbon", "Icons ride a slowly flowing ribbon of light"),
+          ("sundial", "Sundial Clock", "Your apps are the hour markers of a corner clock"),
+          ("pond", "Lily Pond", "Lily pads in a corner pond; running apps bloom"),
+          ("sidebar", "Vista Sidebar", "A glass column on the right with gadgets and app tiles"),
+          ("flip", "Flip 3D Carousel", "Nothing on screen; press Super or touch the bottom-left corner"),
+          ("classic", "Classic taskbar", "Aero-style bar with the Start orb")]
+ICONS = [("Frutiger-Gloss", "Glossy (Frutiger)", "Every app icon inside a glass bubble"),
+         ("Frutiger", "Consistent set (Papirus)", "One matching flat style for every app"),
+         ("Frutiger-Native", "App-provided icons", "Each app shows the icon its developer made")]
+MARK_A, MARK_B = "/* frutiger-personalize: begin */", "/* frutiger-personalize: end */"
+
+
+def read(name, default):
+    try:
+        return open(os.path.join(CONF, name)).read().strip()
+    except OSError:
+        return default
+
+
+def write(name, value):
+    os.makedirs(CONF, exist_ok=True)
+    open(os.path.join(CONF, name), "w").write(value + "\n")
+
+
+def run(*cmd):
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def heading(text):
+    l = Gtk.Label(xalign=0)
+    l.set_markup("<b>%s</b>" % text)
+    l.set_margin_top(8)
+    return l
+
+
+def radio_group(box, options, current):
+    group, buttons = None, {}
+    for key, name, desc in options:
+        rb = Gtk.RadioButton.new_from_widget(group)
+        group = group or rb
+        lab = Gtk.Label(xalign=0)
+        lab.set_markup("%s\n<small>%s</small>" % (name, desc))
+        rb.add(lab)
+        rb.set_active(key == current)
+        buttons[key] = rb
+        box.pack_start(rb, False, False, 0)
+    return buttons
+
+
+class Personalize(Gtk.Window):
+    def __init__(self, page=0):
+        super().__init__(title="Personalize")
+        self.set_default_size(600, 640)
+        self.set_icon_name("preferences-desktop-theme")
+        self.accent = read("accent", SWATCHES[0])
+        self.cfg = fs.load()
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.add(outer)
+        nb = Gtk.Notebook()
+        nb.set_vexpand(True)
+        outer.pack_start(nb, True, True, 0)
+        nb.append_page(self.scroll(self.page_appearance()), Gtk.Label(label="Appearance"))
+        nb.append_page(self.scroll(self.page_taskbar()), Gtk.Label(label="Taskbar"))
+        nb.append_page(self.scroll(self.page_desktop()), Gtk.Label(label="Desktop"))
+        nb.connect("realize", lambda *_: nb.set_current_page(page))
+        bb = Gtk.ButtonBox(layout_style=Gtk.ButtonBoxStyle.END, spacing=6)
+        bb.set_border_width(10)
+        cancel = Gtk.Button(label="Cancel")
+        cancel.connect("clicked", lambda *_: self.destroy())
+        save = Gtk.Button(label="Save changes")
+        save.get_style_context().add_class("suggested-action")
+        save.connect("clicked", self.apply)
+        bb.add(cancel)
+        bb.add(save)
+        outer.pack_end(bb, False, False, 0)
+
+    @staticmethod
+    def scroll(child):
+        sw = Gtk.ScrolledWindow()
+        sw.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        child.set_border_width(16)
+        sw.add(child)
+        return sw
+
+    # ------------------------------------------------------------ Appearance
+    def page_appearance(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        h = Gtk.Label(xalign=0)
+        h.set_markup("<span size='large' foreground='#1e3f7a'>Change the color of your window borders, Start menu and taskbar</span>")
+        h.set_line_wrap(True)
+        box.pack_start(h, False, False, 0)
+        sw = Gtk.FlowBox(max_children_per_line=11, selection_mode=Gtk.SelectionMode.NONE)
+        for c in SWATCHES:
+            b = Gtk.Button()
+            b.set_size_request(40, 28)
+            css = Gtk.CssProvider()
+            css.load_from_data(("button{background-image:linear-gradient(to bottom, alpha(white,.6), alpha(white,.1) 50%%, transparent 51%%);"
+                                "background-color:%s; border-color:alpha(black,.35);}" % c).encode())
+            b.get_style_context().add_provider(css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+            b.set_tooltip_text(c)
+            b.connect("clicked", lambda _b, c=c: self.set_accent(c))
+            sw.add(b)
+        rgba = Gdk.RGBA()
+        rgba.parse(self.accent)
+        self.more = Gtk.ColorButton.new_with_rgba(rgba)
+        self.more.set_tooltip_text("Custom color…")
+        self.more.connect("color-set", lambda b: self.set_accent(self.hex(b.get_rgba())))
+        sw.add(self.more)
+        box.pack_start(sw, False, False, 0)
+        g = Gtk.Grid(column_spacing=12, row_spacing=8)
+        g.attach(Gtk.Label(label="Color intensity", xalign=0), 0, 0, 1, 1)
+        self.scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 10, 85, 1)
+        self.scale.set_value(int(read("intensity", "45")))
+        self.scale.set_hexpand(True)
+        g.attach(self.scale, 1, 0, 1, 1)
+        self.blur = Gtk.CheckButton(label="Enable Aero blur (needs 3D graphics)")
+        self.blur.set_active(read("blur", "on") == "on")
+        g.attach(self.blur, 0, 1, 2, 1)
+        box.pack_start(g, False, False, 0)
+        box.pack_start(heading("App icons"), False, False, 0)
+        self.icon_buttons = radio_group(box, ICONS, read("icons", "Frutiger-Gloss"))
+        return box
+
+    # ------------------------------------------------------------ Taskbar
+    def page_taskbar(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        box.pack_start(heading("Taskbar style"), False, False, 0)
+        current = read("taskbar", "dock")
+        self.style_combo = Gtk.ComboBoxText()
+        for key, name, _d in STYLES:
+            self.style_combo.append(key, name)
+        self.style_combo.set_active_id(current if any(k == current for k, *_ in STYLES) else "dock")
+        self.style_desc = Gtk.Label(xalign=0)
+        self.style_desc.set_line_wrap(True)
+        self.style_combo.connect("changed", lambda c: self.style_desc.set_markup(
+            "<small>%s</small>" % dict((k, d) for k, _n, d in STYLES)[c.get_active_id()]))
+        self.style_combo.emit("changed")
+        try_btn = Gtk.Button(label="Try it")
+        try_btn.set_tooltip_text("Switch now without closing Personalize")
+        try_btn.connect("clicked", lambda *_: run("frutiger-taskbar", self.style_combo.get_active_id()))
+        row = Gtk.Box(spacing=6)
+        row.pack_start(self.style_combo, True, True, 0)
+        row.pack_start(try_btn, False, False, 0)
+        box.pack_start(row, False, False, 0)
+        box.pack_start(self.style_desc, False, False, 0)
+        return box
+
+    # ------------------------------------------------------------ Desktop
+    def switch(self, grid, row, key, label, desc=None):
+        sw = Gtk.Switch()
+        sw.set_active(self.cfg.get(key) == "on")
+        sw.set_halign(Gtk.Align.END)
+        sw.set_valign(Gtk.Align.CENTER)
+        lab = Gtk.Label(xalign=0)
+        lab.set_markup(label + ("\n<small>%s</small>" % desc if desc else ""))
+        lab.set_hexpand(True)
+        lab.set_line_wrap(True)
+        grid.attach(lab, 0, row, 1, 1)
+        grid.attach(sw, 1, row, 1, 1)
+        self.switches[key] = sw
+        return sw
+
+    def page_desktop(self):
+        self.switches = {}
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        calm = Gtk.Grid(column_spacing=12, row_spacing=6)
+        self.switch(calm, 0, "calm_mode", "<b>Calm mode</b>",
+                    "Turns off everything that moves (live effects, weather, changing wallpapers, "
+                    "window effects, the animated screensaver) without changing your choices below.")
+        box.pack_start(calm, False, False, 0)
+
+        box.pack_start(heading("Wallpaper"), False, False, 0)
+        self.wall_buttons = radio_group(box, [
+            ("timeofday", "Time of day", "Lagoon at dawn, midday, sunset and a starry night with an aurora"),
+            ("static", "One picture", "Choose it below"),
+            ("slideshow", "Slideshow", "Cycle through the Frutiger wallpaper pack")], self.cfg.get("wallpaper_mode"))
+        flow = Gtk.FlowBox(max_children_per_line=5, selection_mode=Gtk.SelectionMode.SINGLE)
+        flow.set_homogeneous(True)
+        self.flow_names = []
+        for name, path in fs.pack().items():
+            try:
+                pix = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, 100, 56, False)
+            except Exception:
+                continue
+            img = Gtk.Image.new_from_pixbuf(pix)
+            img.set_tooltip_text(name.replace("-", " ").title())
+            flow.add(img)
+            self.flow_names.append(name)
+            if name == self.cfg.get("wallpaper"):
+                flow.select_child(flow.get_child_at_index(len(self.flow_names) - 1))
+        flow.connect("child-activated", lambda f, ch: self.wall_buttons["static"].set_active(True))
+        self.flow = flow
+        box.pack_start(flow, False, False, 0)
+        srow = Gtk.Box(spacing=8)
+        srow.pack_start(Gtk.Label(label="Slideshow: change every"), False, False, 0)
+        self.slide_min = Gtk.SpinButton.new_with_range(1, 240, 1)
+        self.slide_min.set_value(int(self.cfg.get("slideshow_minutes", 15)))
+        srow.pack_start(self.slide_min, False, False, 0)
+        srow.pack_start(Gtk.Label(label="minutes"), False, False, 0)
+        box.pack_start(srow, False, False, 0)
+
+        box.pack_start(heading("Wallpaper effects"), False, False, 0)
+        g = Gtk.Grid(column_spacing=12, row_spacing=6)
+        self.switch(g, 0, "live_effects", "Live effects", "Bubbles rise and the water ripples")
+        self.switch(g, 1, "weather_effects", "Weather effects",
+                    "Rain or snow on the desktop when it's raining or snowing in your city (uses the internet)")
+        box.pack_start(g, False, False, 0)
+        crow = Gtk.Box(spacing=8)
+        crow.pack_start(Gtk.Label(label="Your city"), False, False, 0)
+        self.city = Gtk.Entry()
+        self.city.set_placeholder_text("e.g. Nashville")
+        self.city.set_text(self.cfg.get("weather_city", ""))
+        crow.pack_start(self.city, True, True, 0)
+        box.pack_start(crow, False, False, 0)
+
+        box.pack_start(heading("Desktop gadgets"), False, False, 0)
+        g = Gtk.Grid(column_spacing=12, row_spacing=6)
+        master = self.switch(g, 0, "gadgets", "Show gadgets on the desktop")
+        subs = [self.switch(g, i + 1, k, "    " + n) for i, (k, n) in enumerate(
+            [("gadget_clock", "Clock"), ("gadget_weather", "Weather (uses your city)"), ("gadget_cpu", "CPU and memory meter"),
+             ("gadget_notes", "Sticky note"), ("gadget_slideshow", "Photo slideshow (from Pictures)")])]
+        def sync(*_):
+            for s in subs:
+                s.set_sensitive(master.get_active())
+        master.connect("notify::active", sync)
+        sync()
+        box.pack_start(g, False, False, 0)
+
+        box.pack_start(heading("Sounds, screensaver and effects"), False, False, 0)
+        g = Gtk.Grid(column_spacing=12, row_spacing=6)
+        self.switch(g, 0, "sounds", "Frutiger sounds", "Startup chime, water-drop notifications, bubble pops")
+        self.switch(g, 1, "click_sounds", "Glassy click sounds", "A soft tick when you press buttons")
+        self.switch(g, 2, "screensaver", "Bubbles screensaver")
+        self.switch(g, 3, "window_effects", "Window effects", "Windows fade in and out")
+        box.pack_start(g, False, False, 0)
+        srow = Gtk.Box(spacing=8)
+        srow.pack_start(Gtk.Label(label="Start the screensaver after"), False, False, 0)
+        self.saver_min = Gtk.SpinButton.new_with_range(1, 120, 1)
+        self.saver_min.set_value(int(self.cfg.get("screensaver_minutes", 10)))
+        srow.pack_start(self.saver_min, False, False, 0)
+        srow.pack_start(Gtk.Label(label="minutes"), False, False, 0)
+        prev = Gtk.Button(label="Preview")
+        prev.connect("clicked", lambda *_: subprocess.Popen(["frutiger-screensaver", "--preview"]))
+        srow.pack_end(prev, False, False, 0)
+        box.pack_start(srow, False, False, 0)
+        welcome = Gtk.Button(label="Open the Welcome Center")
+        welcome.connect("clicked", lambda *_: subprocess.Popen(["frutiger-welcome"]))
+        welcome.set_halign(Gtk.Align.START)
+        welcome.set_margin_top(10)
+        box.pack_start(welcome, False, False, 0)
+        return box
+
+    # ------------------------------------------------------------ helpers
+    @staticmethod
+    def hex(c):
+        return "#%02x%02x%02x" % (round(c.red * 255), round(c.green * 255), round(c.blue * 255))
+
+    def set_accent(self, c):
+        self.accent = c
+        rgba = Gdk.RGBA()
+        rgba.parse(c)
+        self.more.set_rgba(rgba)
+
+    # ------------------------------------------------------------ apply
+    def apply(self, *_):
+        a = self.accent
+        alpha = self.scale.get_value() / 100
+        write("accent", a)
+        write("intensity", str(int(self.scale.get_value())))
+        write("blur", "on" if self.blur.get_active() else "off")
+
+        # GTK accent override
+        gtkcss = os.path.join(HOME, ".config/gtk-3.0/gtk.css")
+        os.makedirs(os.path.dirname(gtkcss), exist_ok=True)
+        old = open(gtkcss).read() if os.path.exists(gtkcss) else ""
+        old = re.sub(re.escape(MARK_A) + r".*?" + re.escape(MARK_B) + r"\n?", "", old, flags=re.S)
+        block = (f"{MARK_A}\n@define-color accent {a};\n"
+                 f".xfce4-panel {{ background-color: alpha({a}, {alpha * .85:.2f}); }}\n"
+                 f"#whiskermenu-window {{ background-color: alpha({a}, {min(1, alpha + .1):.2f}); }}\n{MARK_B}\n")
+        open(gtkcss, "w").write(old + block)
+        run("xfconf-query", "-c", "xsettings", "-p", "/Net/ThemeName", "-s", "Adwaita")
+        run("xfconf-query", "-c", "xsettings", "-p", "/Net/ThemeName", "-s", "Frutiger-Aero")
+
+        # window frames in the new tint
+        user_theme = os.path.join(HOME, ".local/share/themes/Frutiger-Aero-Custom")
+        os.makedirs(os.path.join(user_theme, "xfwm4"), exist_ok=True)
+        shutil.copy("/usr/share/themes/Frutiger-Aero/xfwm4/themerc", os.path.join(user_theme, "xfwm4/themerc"))
+        run("python3", "/usr/share/frutiger/gen_assets.py", "--accent", a.lstrip("#"),
+            "--alpha", f"{min(.95, alpha + .1):.2f}", "--out", os.path.join(user_theme, "xfwm4"))
+        run("xfconf-query", "-c", "xfwm4", "-p", "/general/theme", "-s", "Default")
+        run("xfconf-query", "-c", "xfwm4", "-p", "/general/theme", "-s", "Frutiger-Aero-Custom")
+
+        # Bubble Dock tint
+        src = open("/usr/share/plank/themes/Frutiger-Bubble/dock.theme").read()
+        r, g, b = (int(a[i:i + 2], 16) for i in (1, 3, 5))
+        src = re.sub(r"FillEndColor=.*", f"FillEndColor={r};;{g};;{b};;{int(alpha * 255)}", src)
+        pdir = os.path.join(HOME, ".local/share/plank/themes/Frutiger-Custom")
+        os.makedirs(pdir, exist_ok=True)
+        open(os.path.join(pdir, "dock.theme"), "w").write(src)
+        run("gsettings", "set", "net.launchpad.plank.dock.settings:/net/launchpad/plank/docks/dock1/", "theme", "Frutiger-Custom")
+
+        # icons (GTK/Xfce/strips via xsettings; Qt via qt5ct/qt6ct)
+        icons = next(k for k, rb in self.icon_buttons.items() if rb.get_active())
+        write("icons", icons)
+        if icons == "Frutiger-Gloss":    # gloss any Flatpak apps too (quick; skips existing)
+            subprocess.Popen(["python3", "/usr/share/frutiger/make_gloss_icons.py",
+                              "--src", "/var/lib/flatpak/exports/share/icons/hicolor/scalable/apps",
+                              "--src", "/var/lib/flatpak/exports/share/icons/hicolor/128x128/apps",
+                              "--src", os.path.join(HOME, ".local/share/flatpak/exports/share/icons/hicolor/scalable/apps"),
+                              "--dest", os.path.join(HOME, ".local/share/icons/Frutiger-Gloss/scalable/apps")])
+        run("xfconf-query", "-c", "xsettings", "-p", "/Net/IconThemeName", "-s", icons)
+        for v in ("qt5ct", "qt6ct"):
+            f = os.path.join(HOME, f".config/{v}/{v}.conf")
+            if os.path.exists(f):
+                open(f, "w").write(re.sub(r"(?m)^icon_theme=.*$", f"icon_theme={icons}", open(f).read()))
+
+        # desktop settings (frutiger-desktopd and frutiger-gadgets pick these up within seconds)
+        c = fs.load()
+        for k, sw in self.switches.items():
+            c[k] = "on" if sw.get_active() else "off"
+        c["wallpaper_mode"] = next(k for k, rb in self.wall_buttons.items() if rb.get_active())
+        sel = self.flow.get_selected_children()
+        if sel:
+            c["wallpaper"] = self.flow_names[sel[0].get_index()]
+        c["slideshow_minutes"] = str(int(self.slide_min.get_value()))
+        c["screensaver_minutes"] = str(int(self.saver_min.get_value()))
+        city = self.city.get_text().strip()
+        if city != c.get("weather_city"):
+            c["weather_city"], c["weather_lat"], c["weather_lon"] = city, "", ""
+        fs.save(c)
+
+        # taskbar style + compositor (frutiger-session re-reads blur / window effects)
+        style = self.style_combo.get_active_id() or "dock"
+        run("pkill", "-u", str(os.getuid()), "-f", "/usr/bin/frutiger-orbit")
+        run("pkill", "-u", str(os.getuid()), "-x", "plank")
+        run("frutiger-taskbar", style)
+        subprocess.Popen(["frutiger-session", "--refresh"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.destroy()
+
+
+if __name__ == "__main__":
+    page = {"--taskbar": 1, "--desktop": 2}.get(sys.argv[1] if len(sys.argv) > 1 else "", 0)
+    w = Personalize(page)
+    w.connect("destroy", Gtk.main_quit)
+    w.show_all()
+    Gtk.main()

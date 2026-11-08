@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Frutiger
+Description=Frutiger OS boot splash: sky-and-water scene with the logo in a glass bubble
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/frutiger
+ScriptFile=/usr/share/plymouth/themes/frutiger/frutiger.script

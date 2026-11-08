@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=X-GNOME-Metatheme
+Name=Frutiger-Aero
+Comment=Glossy sky-and-water glass theme for Frutiger OS
+Encoding=UTF-8
+
+[X-GNOME-Metatheme]
+GtkTheme=Frutiger-Aero
+MetacityTheme=Frutiger-Aero
+IconTheme=Frutiger-Gloss
+CursorTheme=Frutiger-Cursors
+ButtonLayout=menu:minimize,maximize,close

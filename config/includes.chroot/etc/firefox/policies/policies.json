@@ -1,0 +1,12 @@
+{
+  "policies": {
+    "ExtensionSettings": {
+      "frutiger-aero@frutiger-os": {
+        "installation_mode": "normal_installed",
+        "install_url": "file:///usr/share/frutiger/firefox/frutiger-aero.xpi"
+      }
+    },
+    "DisplayBookmarksToolbar": "never",
+    "Homepage": { "StartPage": "homepage" }
+  }
+}

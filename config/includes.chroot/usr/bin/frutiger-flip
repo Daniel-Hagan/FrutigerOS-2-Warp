@@ -1,0 +1,328 @@
+#!/usr/bin/env python3
+"""Frutiger OS — Flip 3D Carousel (the "no taskbar" style).
+
+Nothing sits on screen. Press the Super key (frutiger-taskbar binds it to
+`frutiger-flip --show`) or push the pointer into the bottom-left corner, and
+your open windows fan out as a stack of glass cards, after Windows 7's Flip 3D.
+
+    scroll / arrow keys / Tab   flip through the stack
+    Enter or click the front    switch to that window
+    Esc or click the backdrop   close
+    pinned-app bubbles (bottom) launch an app;  orb (top-left) = Start menu
+
+Run once with no arguments as the background daemon (watches the hot corner);
+`frutiger-flip --show` toggles the carousel.
+"""
+import math, subprocess, sys, time
+sys.path.insert(0, "/usr/lib/frutiger")
+from frutiger_strip import (Gtk, Gdk, GdkX11, GdkPixbuf, Gio, GLib, Wnck, cairo,
+                            load_pins, app_for_window, rounded, ORB_IMG, SELF_TITLES)
+
+THUMB_W = 640
+SELF_TITLES = set(SELF_TITLES) | {"Frutiger Flip"}
+
+
+class Flip(Gtk.Window):
+    def __init__(self, app):
+        super().__init__(application=app, type=Gtk.WindowType.TOPLEVEL)
+        self.set_title("Frutiger Flip")
+        self.set_decorated(False)
+        self.set_keep_above(True)
+        self.set_skip_taskbar_hint(True)
+        self.set_skip_pager_hint(True)
+        self.set_app_paintable(True)
+        vis = self.get_screen().get_rgba_visual()
+        if vis:
+            self.set_visual(vis)
+        self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.SCROLL_MASK |
+                        Gdk.EventMask.KEY_PRESS_MASK)
+        self.connect("draw", self.on_draw)
+        self.connect("button-press-event", self.on_press)
+        self.connect("scroll-event", self.on_scroll)
+        self.connect("key-press-event", self.on_key)
+        self.connect("delete-event", lambda *a: (self.close_flip(), True)[1])
+        self.screen = Wnck.Screen.get_default()
+        self.icon_theme = Gtk.IconTheme.get_default()
+        self.orb = GdkPixbuf.Pixbuf.new_from_file_at_size(ORB_IMG, 44, 44)
+        self.cards, self.pins, self.sel, self.pos = [], [], 0, 0.0
+        self.shown = False
+        self.anim = None
+
+    # ---------- show / hide
+    def toggle(self):
+        self.close_flip() if self.shown else self.open_flip()
+
+    def open_flip(self):
+        self.screen.force_update()
+        wins = [w for w in reversed(self.screen.get_windows_stacked())
+                if not w.is_skip_tasklist() and w.get_name() not in SELF_TITLES]
+        disp = Gdk.Display.get_default()
+        self.cards = []
+        for w in wins:                                   # grab thumbnails before we cover the screen
+            thumb = None
+            if not w.is_minimized():
+                try:
+                    gw = GdkX11.X11Window.foreign_new_for_display(disp, w.get_xid())
+                    _, _, ww, hh = gw.get_geometry()
+                    pix = Gdk.pixbuf_get_from_window(gw, 0, 0, ww, hh)
+                    if pix:
+                        k = THUMB_W / max(1, ww)
+                        thumb = pix.scale_simple(THUMB_W, max(1, int(hh * k)), GdkPixbuf.InterpType.BILINEAR)
+                except Exception:
+                    thumb = None
+            self.cards.append((w, thumb, app_for_window(w)))
+        self.pins = load_pins()
+        self.sel, self.pos = 0, 0.0
+        mon = disp.get_primary_monitor() or disp.get_monitor(0)
+        g = mon.get_geometry()
+        self.move(g.x, g.y)
+        self.resize(g.width, g.height)
+        self.W, self.H = g.width, g.height
+        self.shown = True
+        self.show_all()
+        self.present()
+        self.fullscreen()
+
+    def close_flip(self):
+        self.shown = False
+        self.hide()
+
+    # ---------- icons
+    def icon(self, app, w, size):
+        if app and app.get_icon():
+            info = self.icon_theme.lookup_by_gicon(app.get_icon(), size, Gtk.IconLookupFlags.FORCE_SIZE)
+            if info:
+                try:
+                    return info.load_icon()
+                except GLib.Error:
+                    pass
+        if w is not None and w.get_icon():
+            return w.get_icon().scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
+        return None
+
+    # ---------- drawing
+    def card_geom(self):
+        cw = min(self.W * .48, 760)
+        return cw, cw * .62
+
+    def on_draw(self, _w, cr):
+        W, H = self.W, self.H
+        cr.set_operator(cairo.OPERATOR_SOURCE)
+        bg = cairo.LinearGradient(0, 0, 0, H)
+        bg.add_color_stop_rgba(0, .03, .16, .32, .62)
+        bg.add_color_stop_rgba(1, .02, .08, .18, .72)
+        cr.set_source(bg)
+        cr.paint()
+        cr.set_operator(cairo.OPERATOR_OVER)
+        Gdk.cairo_set_source_pixbuf(cr, self.orb, 24, 20)
+        cr.paint()
+        self.text(cr, time.strftime("%-I:%M %p"), W - 30, 48, 20, align=1)
+        n = len(self.cards)
+        if not n:
+            self.text(cr, "No open windows", W / 2, H * .45, 22, align=.5, alpha=.85)
+        cw, ch = self.card_geom()
+        bx, by = W * .40, H * .52
+        # back to front; a card's depth is its distance behind the selected one
+        order = sorted(range(n), key=lambda i: -((i - self.pos) % n))
+        self.front_rect = None
+        for i in order:
+            d = (i - self.pos) % n
+            if d > 6.5:
+                continue
+            s = .86 ** d
+            x0 = bx + d * 70 - cw * s / 2
+            y0 = by - d * 46 - ch * s / 2
+            a = max(0, 1 - d * .13)
+            cr.save()
+            cr.transform(cairo.Matrix(s, -.1 * s, 0, s, x0, y0 + cw * s * .1 / 2))   # sheared = turned away
+            self.draw_card(cr, *self.cards[i], cw, ch, a, d < .5)
+            cr.restore()
+            if d < .5:
+                self.front_rect = (x0, y0, cw * s, ch * s)
+        # pinned apps
+        self.pin_hits = []
+        k = len(self.pins)
+        px = W / 2 - (k - 1) * 34
+        for j, app in enumerate(self.pins):
+            x, y = px + j * 68, H - 70
+            b = cairo.RadialGradient(x - 8, y - 9, 2, x, y, 26)
+            b.add_color_stop_rgba(0, 1, 1, 1, .95)
+            b.add_color_stop_rgba(.7, .6, .85, 1, .25)
+            b.add_color_stop_rgba(1, 1, 1, 1, .8)
+            cr.arc(x, y, 26, 0, 2 * math.pi)
+            cr.set_source(b)
+            cr.fill()
+            pix = self.icon(app, None, 30)
+            if pix:
+                Gdk.cairo_set_source_pixbuf(cr, pix, x - 15, y - 15)
+                cr.paint()
+            self.pin_hits.append((x, y, app))
+        self.text(cr, "Scroll or use the arrow keys to flip  ·  Enter to switch  ·  Esc to close",
+                  W / 2, H - 18, 13, align=.5, alpha=.75)
+        return False
+
+    def draw_card(self, cr, w, thumb, app, cw, ch, a, front):
+        rounded(cr, -6, -30, cw + 12, ch + 36, 10)        # glass frame + title strip
+        g = cairo.LinearGradient(0, -30, 0, ch)
+        g.add_color_stop_rgba(0, 1, 1, 1, .75 * a)
+        g.add_color_stop_rgba(.06, .55, .8, 1, .55 * a)
+        g.add_color_stop_rgba(1, .3, .6, .9, .5 * a)
+        cr.set_source(g)
+        cr.fill_preserve()
+        cr.set_source_rgba(1, 1, 1, (.95 if front else .6) * a)
+        cr.set_line_width(2 if front else 1)
+        cr.stroke()
+        cr.rectangle(0, 0, cw, ch)
+        if thumb:
+            cr.save()
+            cr.clip()
+            k = min(cw / thumb.get_width(), ch / thumb.get_height())
+            k = max(k, cw / thumb.get_width())
+            cr.scale(k, k)
+            Gdk.cairo_set_source_pixbuf(cr, thumb, 0, 0)
+            cr.paint_with_alpha(a)
+            cr.restore()
+        else:
+            gg = cairo.LinearGradient(0, 0, 0, ch)
+            gg.add_color_stop_rgba(0, .95, .98, 1, a)
+            gg.add_color_stop_rgba(1, .8, .9, 1, a)
+            cr.set_source(gg)
+            cr.fill()
+            pix = self.icon(app, w, 96)
+            if pix:
+                Gdk.cairo_set_source_pixbuf(cr, pix, cw / 2 - 48, ch / 2 - 48)
+                cr.paint_with_alpha(a)
+        pix = self.icon(app, w, 18)
+        if pix:
+            Gdk.cairo_set_source_pixbuf(cr, pix, 2, -25)
+            cr.paint_with_alpha(a)
+        title = w.get_name()
+        title = title if len(title) < 60 else title[:58] + "…"
+        cr.select_font_face("Noto Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        cr.set_font_size(13)
+        cr.move_to(26, -11)
+        cr.set_source_rgba(.05, .12, .22, a)
+        cr.show_text(title)
+
+    def text(self, cr, s, x, y, size, align=0.0, alpha=1.0):
+        cr.select_font_face("Noto Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        cr.set_font_size(size)
+        e = cr.text_extents(s)
+        cr.move_to(x - e.width * align, y)
+        cr.set_source_rgba(1, 1, 1, alpha)
+        cr.show_text(s)
+
+    # ---------- interaction
+    def flip(self, step):
+        n = len(self.cards)
+        if not n:
+            return
+        self.sel = (self.sel + step) % n
+        start, target, t0 = self.pos, self.sel, time.monotonic()
+        diff = (target - start + n / 2) % n - n / 2      # shortest way round
+
+        def stepper():
+            p = min(1, (time.monotonic() - t0) / .22)
+            e = 1 - (1 - p) ** 3
+            self.pos = (start + diff * e) % n
+            self.queue_draw()
+            if p >= 1:
+                self.pos = float(target)
+                self.anim = None
+                return False
+            return True
+        if self.anim:
+            GLib.source_remove(self.anim)
+        self.anim = GLib.timeout_add(16, stepper)
+
+    def activate_sel(self, ts):
+        if self.cards:
+            w = self.cards[self.sel][0]
+            self.close_flip()
+            if w.is_minimized():
+                w.unminimize(ts)
+            w.activate(ts)
+        else:
+            self.close_flip()
+
+    def on_scroll(self, _w, ev):
+        if ev.direction in (Gdk.ScrollDirection.UP, Gdk.ScrollDirection.LEFT):
+            self.flip(-1)
+        elif ev.direction in (Gdk.ScrollDirection.DOWN, Gdk.ScrollDirection.RIGHT):
+            self.flip(1)
+        elif ev.direction == Gdk.ScrollDirection.SMOOTH:
+            self.flip(1 if ev.delta_y > 0 else -1)
+        return True
+
+    def on_key(self, _w, ev):
+        k = ev.keyval
+        if k == Gdk.KEY_Escape:
+            self.close_flip()
+        elif k in (Gdk.KEY_Right, Gdk.KEY_Down, Gdk.KEY_Tab):
+            self.flip(1)
+        elif k in (Gdk.KEY_Left, Gdk.KEY_Up, Gdk.KEY_ISO_Left_Tab):
+            self.flip(-1)
+        elif k in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_space):
+            self.activate_sel(ev.time)
+        return True
+
+    def on_press(self, _w, ev):
+        if (ev.x - 46) ** 2 + (ev.y - 42) ** 2 < 24 ** 2:
+            self.close_flip()
+            subprocess.Popen(["xfce4-popup-whiskermenu"])
+            return True
+        for x, y, app in getattr(self, "pin_hits", []):
+            if (ev.x - x) ** 2 + (ev.y - y) ** 2 < 28 ** 2:
+                self.close_flip()
+                app.launch([], None)
+                return True
+        fr = self.front_rect
+        if fr and fr[0] <= ev.x <= fr[0] + fr[2] and fr[1] - 30 <= ev.y <= fr[1] + fr[3]:
+            self.activate_sel(ev.time)
+        elif ev.x > self.W * .40 - 100 and ev.y < self.H * .52:
+            self.flip(1)                                  # clicking the stack behind brings the next card
+        else:
+            self.close_flip()
+        return True
+
+
+class FlipApp(Gtk.Application):
+    def __init__(self):
+        super().__init__(application_id="org.frutiger.Flip",
+                         flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
+        self.win = None
+        self.corner_since = None
+
+    def do_startup(self):
+        Gtk.Application.do_startup(self)
+        Wnck.set_client_type(Wnck.ClientType.PAGER)
+        self.win = Flip(self)
+        self.hold()                                       # keep running as the hot-corner daemon
+        GLib.timeout_add(120, self.watch_corner)
+
+    def do_command_line(self, cmd):
+        if "--show" in cmd.get_arguments()[1:]:
+            self.win.toggle()
+        return 0
+
+    def watch_corner(self):
+        disp = Gdk.Display.get_default()
+        seat = disp.get_default_seat()
+        _, x, y = seat.get_pointer().get_position()
+        mon = disp.get_primary_monitor() or disp.get_monitor(0)
+        g = mon.get_geometry()
+        in_corner = x <= g.x + 1 and y >= g.y + g.height - 2
+        if in_corner and not self.win.shown:
+            if self.corner_since is None:
+                self.corner_since = time.monotonic()
+            elif time.monotonic() - self.corner_since > .2:
+                self.win.open_flip()
+                self.corner_since = None
+        elif not in_corner:
+            self.corner_since = None
+        return True
+
+
+if __name__ == "__main__":
+    GLib.set_prgname("frutiger-flip")
+    sys.exit(FlipApp().run(sys.argv))

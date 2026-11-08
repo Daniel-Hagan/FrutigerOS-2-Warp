@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Frutiger OS — Cloud Bar taskbar.
+
+Glossy cartoon clouds drift along the top edge of the screen, one per app.
+Running apps are full, bright clouds; pinned apps that aren't running are
+smaller and paler. The active window's cloud is lit gold by the sun, and a
+cloud whose app wants attention rains. Click / middle-click / right-click as
+on every Frutiger strip; the orb on the left opens the Start menu.
+"""
+import math, sys
+sys.path.insert(0, "/usr/lib/frutiger")
+from frutiger_strip import Strip, run, accent, cairo
+
+PUFFS = [(-20, 4, 13), (-6, -6, 16), (12, -4, 14), (24, 5, 11), (2, 7, 15)]   # (dx, dy, r)
+
+
+def cloud_path(cr, x, y, k):
+    for dx, dy, r in PUFFS:
+        cr.new_sub_path()
+        cr.arc(x + dx * k, y + dy * k, r * k, 0, 2 * math.pi)
+
+
+class CloudBar(Strip):
+    TITLE = "Frutiger Cloud Bar"
+    PRGNAME = "frutiger-cloudbar"
+    EDGE = "top"
+    STRIP_H = 56
+    EXTRA_H = 60
+    item_radius = 24
+
+    def draw_background(self, cr, w, h, top, t):
+        H = self.STRIP_H
+        ar, ag, ab = accent()
+        g = cairo.LinearGradient(0, 0, 0, H)
+        g.add_color_stop_rgba(0, .22, .58, .92, .78)
+        g.add_color_stop_rgba(.55, .45, .78, 1, .55)
+        g.add_color_stop_rgba(1, ar, ag, ab, .30)
+        cr.rectangle(0, 0, w, H)
+        cr.set_source(g)
+        cr.fill()
+        sun = cairo.RadialGradient(w * .82, -10, 0, w * .82, -10, 160)   # the sun peeking in
+        sun.add_color_stop_rgba(0, 1, .98, .8, .9)
+        sun.add_color_stop_rgba(1, 1, .98, .8, 0)
+        cr.set_source(sun)
+        cr.rectangle(0, 0, w, H)
+        cr.fill()
+        cr.move_to(0, H - .5)
+        cr.line_to(w, H - .5)
+        cr.set_source_rgba(1, 1, 1, .7)
+        cr.set_line_width(1)
+        cr.stroke()
+
+    def item_pos(self, i, n, it, w, top, t):
+        x0, x1 = 90, w - 120
+        step = min(100, (x1 - x0) / max(1, n))
+        drift = math.sin(t * .25 + it.seed * 6.28) * min(10, step * .12)
+        return x0 + step * (i + .5) + drift, self.STRIP_H / 2 + 2
+
+    def draw_item(self, cr, it, x, y, t, hover):
+        k = 1.0 if it.running else .82
+        a = 1.0 if it.running else .7
+        if it.attention:                                  # rain falling into the headroom
+            cr.set_line_width(1.5)
+            for j in range(7):
+                rx = x - 20 * k + j * 7 * k
+                ry = y + 14 + ((t * 60 + j * 13) % 34)
+                cr.move_to(rx, ry)
+                cr.line_to(rx - 2, ry + 6)
+                cr.set_source_rgba(.55, .8, 1, .85)
+                cr.stroke()
+        cloud_path(cr, x, y, k)
+        g = cairo.LinearGradient(0, y - 22 * k, 0, y + 22 * k)
+        if it.active:                                     # sunlit gold top
+            g.add_color_stop_rgba(0, 1, .93, .62, a)
+            g.add_color_stop_rgba(.5, 1, 1, .97, a)
+        else:
+            g.add_color_stop_rgba(0, 1, 1, 1, a)
+            g.add_color_stop_rgba(.5, .98, .99, 1, a)
+        g.add_color_stop_rgba(1, .72, .82, .93, a)
+        cr.set_source(g)
+        cr.fill_preserve()
+        cr.set_source_rgba(1, .85, .4, .9) if it.active else cr.set_source_rgba(1, 1, 1, .9 * a)
+        cr.set_line_width(2 if it.active else 1)
+        cr.stroke()
+        cr.save()                                         # gloss
+        cr.translate(x - 4 * k, y - 10 * k)
+        cr.scale(1, .4)
+        cr.arc(0, 0, 18 * k, 0, 2 * math.pi)
+        cr.restore()
+        cr.set_source_rgba(1, 1, 1, .55 * a)
+        cr.fill()
+        self.paint_icon(cr, it, x, y + 2, int(24 * k), a)
+        n = len(it.windows)
+        for j in range(min(n, 4) if n > 1 else 0):
+            cr.arc(x - (min(n, 4) - 1) * 4 + j * 8, y + 22, 2, 0, 2 * math.pi)
+            cr.set_source_rgba(1, 1, 1, .95)
+            cr.fill()
+
+
+if __name__ == "__main__":
+    run(CloudBar)

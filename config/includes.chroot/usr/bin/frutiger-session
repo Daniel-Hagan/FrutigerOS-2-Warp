@@ -1,0 +1,79 @@
+#!/bin/bash
+# Frutiger OS session setup — runs at every Xfce login (from /etc/xdg/autostart).
+#   frutiger-session            full login setup
+#   frutiger-session --refresh  re-apply compositor settings (called by Personalize)
+CONF="$HOME/.config/frutiger"; mkdir -p "$CONF"
+INI="$CONF/desktop.ini"
+get() {  # get <key> <default>  (reads desktop.ini written by Personalize)
+  v=$(sed -n "s/^$1 *= *//p" "$INI" 2>/dev/null | tail -n1); echo "${v:-$2}"
+}
+calm=$(get calm_mode off)
+effects=$(get window_effects on); [ "$calm" = on ] && effects=off
+
+start_compositor() {
+  pkill -u "$(id -u)" -x picom 2>/dev/null
+  flags=""; [ "$effects" = off ] && flags="--no-fading-openclose --fade-in-step=1 --fade-out-step=1"
+  if [ "$(cat "$CONF/blur" 2>/dev/null || echo on)" = on ] && command -v picom >/dev/null; then
+    xfconf-query -c xfwm4 -p /general/use_compositing -s false
+    sleep 0.5
+    # shellcheck disable=SC2086
+    if ! picom --config /etc/xdg/picom/frutiger.conf -b $flags; then
+      xfconf-query -c xfwm4 -p /general/use_compositing -s true      # no 3D: xfwm4's own compositor
+    fi
+  else
+    xfconf-query -c xfwm4 -p /general/use_compositing -s true
+  fi
+}
+
+if [ "$1" = "--refresh" ]; then start_compositor; exit 0; fi
+
+# Startup chime (Frutiger sound theme), unless sounds are off
+if [ "$(get sounds on)" = on ] && command -v canberra-gtk-play >/dev/null; then
+  canberra-gtk-play -i desktop-login -d "Frutiger login" >/dev/null 2>&1 &
+fi
+
+# Live session: "Install Frutiger OS" on the desktop (marked trusted)
+if [ -d /run/live ]; then
+  DESK=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop"); mkdir -p "$DESK"
+  for src in /usr/share/applications/install-debian.desktop /usr/share/applications/calamares.desktop; do
+    if [ -f "$src" ] && [ ! -e "$DESK/install-frutiger-os.desktop" ]; then
+      cp "$src" "$DESK/install-frutiger-os.desktop"; chmod +x "$DESK/install-frutiger-os.desktop"
+      gio set "$DESK/install-frutiger-os.desktop" metadata::xfce-exe-checksum \
+        "$(sha256sum "$DESK/install-frutiger-os.desktop" | cut -d' ' -f1)" 2>/dev/null || true
+      break
+    fi
+  done
+fi
+
+# Selawik (a free Segoe UI-style font) if the build could download it; Noto Sans otherwise
+if [ ! -e "$CONF/.font-set" ]; then
+  if fc-list | grep -qi selawik; then
+    xfconf-query -c xsettings -p /Gtk/FontName -s "Selawik 10"
+    xfconf-query -c xfwm4 -p /general/title_font -s "Selawik Semibold 10"
+  fi
+  touch "$CONF/.font-set"
+fi
+
+# Flatpak apps can't see /usr/share/themes, so keep a copy in ~/.themes
+mkdir -p "$HOME/.themes"
+cp -ru /usr/share/themes/Frutiger-Aero "$HOME/.themes/" 2>/dev/null
+
+# Glossy icons for Flatpak apps (quick: only new ones)
+if [ "$(cat "$CONF/icons" 2>/dev/null || echo Frutiger-Gloss)" = Frutiger-Gloss ]; then
+  nice python3 /usr/share/frutiger/make_gloss_icons.py \
+    --src /var/lib/flatpak/exports/share/icons/hicolor/scalable/apps \
+    --src /var/lib/flatpak/exports/share/icons/hicolor/128x128/apps \
+    --src "$HOME/.local/share/flatpak/exports/share/icons/hicolor/scalable/apps" \
+    --dest "$HOME/.local/share/icons/Frutiger-Gloss/scalable/apps" >/dev/null 2>&1 &
+fi
+
+start_compositor
+
+# Desktop daemon (wallpaper modes, live effects, weather, screensaver) and gadgets
+pgrep -u "$(id -u)" -f /usr/bin/frutiger-desktopd >/dev/null || setsid /usr/bin/frutiger-desktopd >/dev/null 2>&1 &
+pgrep -u "$(id -u)" -f /usr/bin/frutiger-gadgets  >/dev/null || setsid /usr/bin/frutiger-gadgets  >/dev/null 2>&1 &
+
+frutiger-taskbar "$(cat "$CONF/taskbar" 2>/dev/null || echo dock)"
+
+# First login: the Welcome Center
+[ -e "$CONF/welcome-done" ] || (sleep 3; frutiger-welcome) >/dev/null 2>&1 &

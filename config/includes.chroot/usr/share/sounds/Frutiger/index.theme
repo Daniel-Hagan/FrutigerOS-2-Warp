@@ -1,0 +1,8 @@
+[Sound Theme]
+Name=Frutiger
+Comment=Original glassy, watery sounds for Frutiger OS
+Inherits=freedesktop
+Directories=stereo
+
+[stereo]
+OutputProfile=stereo

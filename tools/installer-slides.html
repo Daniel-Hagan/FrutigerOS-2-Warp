@@ -1,0 +1,28 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;width:800px;height:440px;overflow:hidden;font-family:"Segoe UI","Noto Sans","Nunito Sans",sans-serif}
+#bg{position:absolute;inset:0;background:url(file:///home/claude/frutiger-os/config/includes.chroot/usr/share/plymouth/themes/frutiger/background.png) center/cover}
+.card{position:absolute;left:36px;top:50px;width:360px;padding:26px 28px;border-radius:12px;background:linear-gradient(rgba(255,255,255,.94),rgba(240,248,255,.88));
+ box-shadow:0 0 0 1px rgba(0,40,80,.35),inset 0 0 0 1px #fff,0 10px 30px rgba(0,40,90,.3)}
+h1{margin:0 0 10px;font-weight:300;font-size:32px;color:#1d5fa8}
+p{margin:0 0 8px;font-size:16px;line-height:1.45;color:#22384f}
+.art{position:absolute;right:40px;top:50%;transform:translateY(-50%);width:330px;height:300px;display:grid;place-items:center}
+.sw{display:inline-block;width:40px;height:28px;margin:4px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.3),inset 0 0 0 1px rgba(255,255,255,.6);background-image:linear-gradient(rgba(255,255,255,.65),rgba(255,255,255,.1) 50%,transparent 51%)}
+.glass{border-radius:12px;padding:16px;background:linear-gradient(rgba(255,255,255,.6),rgba(255,255,255,.2) 50%,rgba(255,255,255,.05) 51%,rgba(255,255,255,.25)),rgba(42,167,232,.35);border:1px solid rgba(255,255,255,.8);box-shadow:0 8px 24px rgba(0,40,90,.3)}
+.bub{width:52px;height:52px;border-radius:50%;display:inline-grid;place-items:center;margin:4px;font-size:24px;
+ background:radial-gradient(circle at 32% 26%,rgba(255,255,255,.95) 0 7%,rgba(255,255,255,.35) 18%,rgba(150,225,255,.18) 55%,rgba(255,255,255,.6) 78%,rgba(255,255,255,.15) 80%);border:1px solid rgba(255,255,255,.9)}
+.row{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6);font-size:15px;margin:6px 0;display:flex;align-items:center;gap:10px}
+</style></head><body><div id="bg"></div><div id="c"></div>
+<script>
+const S={
+1:['Welcome to Frutiger OS','Sit back while Frutiger OS is installed. It usually takes about 10 minutes.','When it finishes, restart and remove the USB stick.',
+  '<img src="file:///home/claude/frutiger-os/config/includes.chroot/usr/share/plymouth/themes/frutiger/bubble.png" style="width:260px">'],
+2:['Make it yours','Open <b>Personalize</b> to pick a glass color, change its intensity and turn the Aero blur on or off.','You can also choose between a matching icon set and each app\'s own icons.',
+  '<div class="glass">'+['#2aa7e8','#20c4b8','#5fcf3a','#a8d82a','#f0b42a','#f06a8a','#a46ae8','#6a7ee8','#8a9aaa','#2a4a6a'].map(c=>'<span class="sw" style="background-color:'+c+'"></span>').join('')+'</div>'],
+3:['Three ways to launch','Use the <b>Bubble Dock</b>, the <b>Orbit Launcher</b> or a <b>Classic</b> taskbar with a Start orb.','Switch any time in Personalize, without logging out.',
+  '<div class="glass" style="background-color:rgba(10,70,130,.35)"><div class="row"><span class="bub">🫧</span> Bubble Dock</div><div class="row"><span class="bub">🪐</span> Orbit Launcher</div><div class="row"><span class="bub">🪟</span> Classic taskbar</div></div>'],
+4:['Works with your apps','Install Linux apps from Debian\'s repositories or from Flathub. GTK and Qt apps pick up the glass look automatically.','Games run fullscreen with the blur switched off, so nothing slows them down.',
+  '<div class="glass" style="font-size:40px;white-space:nowrap;letter-spacing:6px">🦊 🎮 🎵 📝</div>'],
+};
+const [h,a,b,art]=S[location.hash.slice(1)||1];
+document.getElementById('c').innerHTML='<div class="card"><h1>'+h+'</h1><p>'+a+'</p><p>'+b+'</p></div><div class="art">'+art+'</div>';
+</script></body></html>

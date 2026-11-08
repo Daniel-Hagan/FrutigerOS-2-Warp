@@ -1,0 +1,1 @@
+DPkg::Post-Invoke { "if [ -x /usr/bin/python3 ] && [ -f /usr/share/frutiger/make_gloss_icons.py ]; then python3 /usr/share/frutiger/make_gloss_icons.py >/dev/null 2>&1 || true; gtk-update-icon-cache -qf /usr/share/icons/Frutiger-Gloss || true; fi"; };

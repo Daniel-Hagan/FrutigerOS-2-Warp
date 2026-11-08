@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""Frutiger OS Bubbles screensaver: glossy bubbles drift and bounce across a deep
+blue screen. Any key, click or mouse movement ends it.
+
+    frutiger-screensaver            (started by frutiger-desktopd after idle time)
+    frutiger-screensaver --preview  (from Personalize)
+    frutiger-screensaver --calm     (Calm mode: still bubbles, no motion)
+"""
+import math, random, sys, time
+import gi
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gtk, Gdk, GLib
+import cairo
+
+CALM = "--calm" in sys.argv
+HUES = [(.55, .85, 1), (.6, 1, .8), (.8, .7, 1), (1, .85, .6), (.6, .95, 1)]
+
+
+class Saver(Gtk.Window):
+    def __init__(self):
+        super().__init__()
+        self.set_title("Frutiger Screensaver")
+        self.set_decorated(False)
+        self.set_keep_above(True)
+        self.set_app_paintable(True)
+        self.add_events(Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.KEY_PRESS_MASK)
+        self.connect("draw", self.on_draw)
+        for sig in ("button-press-event", "key-press-event"):
+            self.connect(sig, lambda *a: Gtk.main_quit())
+        self.connect("motion-notify-event", self.on_motion)
+        self.started = time.monotonic()
+        disp = Gdk.Display.get_default()
+        g = (disp.get_primary_monitor() or disp.get_monitor(0)).get_geometry()
+        self.W, self.H = g.width, g.height
+        rnd = random.Random()
+        self.b = []
+        for _ in range(14):
+            r = 30 + rnd.random() * 90
+            self.b.append([rnd.uniform(r, self.W - r), rnd.uniform(r, self.H - r),
+                           rnd.uniform(-90, 90), rnd.uniform(-90, 90), r, rnd.choice(HUES)])
+        self.last = time.monotonic()
+        self.fullscreen()
+        self.show_all()
+        win = self.get_window()
+        win.set_cursor(Gdk.Cursor.new_for_display(disp, Gdk.CursorType.BLANK_CURSOR))
+        if not CALM:
+            GLib.timeout_add(33, self.tick)
+
+    def on_motion(self, *_):
+        if time.monotonic() - self.started > 1.5:      # ignore the jiggle that started us
+            Gtk.main_quit()
+
+    def tick(self):
+        now = time.monotonic()
+        dt, self.last = min(.05, now - self.last), now
+        for b in self.b:
+            b[0] += b[2] * dt
+            b[1] += b[3] * dt
+            r = b[4]
+            if b[0] < r or b[0] > self.W - r:
+                b[2] = -b[2]
+                b[0] = min(max(b[0], r), self.W - r)
+            if b[1] < r or b[1] > self.H - r:
+                b[3] = -b[3]
+                b[1] = min(max(b[1], r), self.H - r)
+        self.queue_draw()
+        return True
+
+    def on_draw(self, _w, cr):
+        bg = cairo.LinearGradient(0, 0, 0, self.H)
+        bg.add_color_stop_rgb(0, .02, .08, .2)
+        bg.add_color_stop_rgb(1, .01, .03, .1)
+        cr.set_source(bg)
+        cr.paint()
+        for x, y, _vx, _vy, r, (hr, hg, hb) in self.b:
+            g = cairo.RadialGradient(x - r * .35, y - r * .4, r * .05, x, y, r)
+            g.add_color_stop_rgba(0, 1, 1, 1, .9)
+            g.add_color_stop_rgba(.25, hr, hg, hb, .25)
+            g.add_color_stop_rgba(.8, hr * .6, hg * .6, hb * .8, .18)
+            g.add_color_stop_rgba(.96, 1, 1, 1, .6)
+            g.add_color_stop_rgba(1, 1, 1, 1, 0)
+            cr.arc(x, y, r, 0, 2 * math.pi)
+            cr.set_source(g)
+            cr.fill()
+            cr.save()
+            cr.translate(x - r * .2, y - r * .5)
+            cr.scale(1, .45)
+            cr.arc(0, 0, r * .5, 0, 2 * math.pi)
+            cr.restore()
+            cr.set_source_rgba(1, 1, 1, .45)
+            cr.fill()
+        return False
+
+
+if __name__ == "__main__":
+    GLib.set_prgname("frutiger-screensaver")
+    Saver()
+    Gtk.main()

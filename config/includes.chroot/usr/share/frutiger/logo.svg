@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="256" height="256"><defs>
+    <radialGradient id="gb" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#e6fbff"/><stop offset=".45" stop-color="#41b6f0"/><stop offset="1" stop-color="#0a5ea8"/></radialGradient>
+    <radialGradient id="gg" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#f0ffe0"/><stop offset=".45" stop-color="#6fd23e"/><stop offset="1" stop-color="#1d7a1a"/></radialGradient>
+    <linearGradient id="gf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a0"/><stop offset="1" stop-color="#e0a52a"/></linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  </defs>
+    <circle cx="50" cy="50" r="44" fill="url(#gb)" stroke="#fff" stroke-width="3"/>
+    <path d="M50 78c-4-18 4-36 24-46-4 22-10 36-24 46z" fill="url(#gg)" stroke="#fff" stroke-width="2"/>
+    <path d="M48 78C34 66 28 52 32 36c12 10 18 24 16 42z" fill="url(#gg)" stroke="#fff" stroke-width="2"/>
+    <ellipse cx="44" cy="26" rx="26" ry="12" fill="url(#shine)"/>
+  </svg>
