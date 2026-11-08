@@ -31,8 +31,16 @@ body{background:#0a3d6b}
 @keyframes spin{to{transform:rotate(360deg)}}
 #hills{position:absolute;left:0;bottom:0;width:100%;height:42%;pointer-events:none}
 .bubble{position:absolute;border-radius:50%;pointer-events:none;
-  background:radial-gradient(circle at 30% 28%,rgba(255,255,255,.95) 0 8%,rgba(255,255,255,.25) 18%,rgba(140,220,255,.12) 55%,rgba(255,255,255,.55) 72%,rgba(255,255,255,0) 74%);
-  box-shadow:inset 0 0 18px rgba(255,255,255,.35);animation:float linear infinite}
+  background:
+    radial-gradient(ellipse 30% 19% at 35% 23%,rgba(255,255,255,.98) 0%,rgba(255,255,255,.75) 35%,rgba(255,255,255,0) 100%),
+    radial-gradient(ellipse 24% 11% at 63% 81%,rgba(255,255,255,.6) 0%,rgba(255,255,255,0) 100%),
+    radial-gradient(circle at 50% 50%,rgba(255,255,255,0) 50%,rgba(170,228,255,.16) 60%,rgba(130,205,255,.38) 67%,rgba(255,255,255,.9) 70%,rgba(255,255,255,0) 71%),
+    radial-gradient(circle at 38% 32%,rgba(255,255,255,.14) 0%,rgba(110,190,245,.10) 45%,rgba(40,120,200,.22) 70%);
+  box-shadow:inset 0 -3px 7px rgba(10,70,150,.16),inset 0 2px 3px rgba(255,255,255,.45),0 5px 12px -4px rgba(0,40,100,.22);
+  animation:float linear infinite}
+.bubble::after{content:"";position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from 210deg,rgba(255,140,210,.42),rgba(255,236,140,.36),rgba(140,255,200,.34),rgba(120,190,255,.40),rgba(210,150,255,.38),rgba(255,140,210,.42));
+  -webkit-mask:radial-gradient(circle,transparent 56%,#000 66%,#000 70%,transparent 71%);mask:radial-gradient(circle,transparent 56%,#000 66%,#000 70%,transparent 71%);mix-blend-mode:screen;opacity:.85}
 @keyframes float{from{transform:translateY(0)}to{transform:translateY(-120vh)}}
 
 /* ---------- Desktop icons ---------- */
@@ -972,14 +980,36 @@ function beadKick(e) {
 // ---- Aurora Ribbon (bottom)
 function rgbHue(c) { const [r, g, b] = c, mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn; if (!d) return 0; let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; return ((h / 6) + 1) % 1; }
 function wave(g, x, t, ph = 0, amp = 8) { return g.rect[1] + g.rect[3] * .52 + Math.sin(x / 130 + t * .8 + ph) * amp + Math.sin(x / 57 - t * .5 + ph * 2) * amp * .35; }
+function ribbonBand(c, g, t, ph, top, bot) {
+  const w = g.w; c.beginPath(); c.moveTo(-24, wave(g, -24, t, ph) + top);
+  for (let x = 0; x <= w + 24; x += 16) c.lineTo(x, wave(g, x, t, ph) + top);
+  for (let x = w + 24; x >= -24; x -= 16) c.lineTo(x, wave(g, x, t, ph) + bot); c.closePath();
+}
+function ribbonEdge(c, g, t, ph, off) { const w = g.w; c.beginPath(); c.moveTo(-24, wave(g, -24, t, ph) + off); for (let x = 0; x <= w + 24; x += 16) c.lineTo(x, wave(g, x, t, ph) + off); }
+function hfade(c, w, rgb, al) { const gr = c.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, rgba(rgb, 0)); gr.addColorStop(.07, rgba(rgb, al)); gr.addColorStop(.93, rgba(rgb, al)); gr.addColorStop(1, rgba(rgb, 0)); return gr; }
 function ribbonBg(c, g, t) {
-  const hue = rgbHue(accentRGB()), w = g.w;
-  [[hue + .08, 0, 14, .30], [hue, 1.3, 10, .38], [hue - .1, 2.4, 7, .30]].forEach(([bh, ph, th, al]) => {
-    const col = hsl2rgb(((bh % 1) + 1) % 1, .62, .85);
-    c.beginPath(); c.moveTo(0, wave(g, 0, t, ph) - th); for (let x = 0; x <= w + 24; x += 24) c.lineTo(x, wave(g, x, t, ph) - th); for (let x = w + 24; x >= -24; x -= 24) c.lineTo(x, wave(g, x, t, ph) + th); c.closePath();
-    const gr = c.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, rgba(col, 0)); gr.addColorStop(.08, rgba(col, al)); gr.addColorStop(.92, rgba(col, al)); gr.addColorStop(1, rgba(col, 0)); c.fillStyle = gr; c.fill();
-  });
-  c.beginPath(); c.moveTo(0, wave(g, 0, t, 1.3)); for (let x = 0; x <= w + 24; x += 24) c.lineTo(x, wave(g, x, t, 1.3)); c.strokeStyle = "rgba(255,255,255,.55)"; c.lineWidth = 1.2; c.stroke();
+  const hue = rgbHue(accentRGB()), w = g.w, calm = typeof DS !== "undefined" && DS.calm_mode, W = [1, 1, 1];
+  const glass = (bh, ph, th, main) => {
+    const h = ((bh % 1) + 1) % 1, col = hsl2rgb(h, .62, .8), deep = hsl2rgb(h, .32, .85);
+    const stripe = (f0, f1, rgb, al) => { ribbonBand(c, g, t, ph, th * f0, th * f1); c.fillStyle = hfade(c, w, rgb, al); c.fill(); };
+    const line = (f, rgb, al, lw) => { ribbonEdge(c, g, t, ph, th * f); c.strokeStyle = hfade(c, w, rgb, al); c.lineWidth = lw; c.stroke(); };
+    c.save(); c.shadowColor = `rgba(0,25,70,${main ? .45 : .25})`; c.shadowBlur = main ? 10 : 6; c.shadowOffsetY = main ? 5 : 3;
+    stripe(-1, 1, col, main ? .5 : .32); c.restore();
+    stripe(.1, 1, deep, main ? .42 : .25);                 // deeper underside
+    if (main) stripe(.55, 1, deep, .28);
+    stripe(-.84, -.5, W, main ? .82 : .5);                 // narrow glossy streak
+    stripe(-.5, -.18, W, main ? .2 : .12);                 // soft fall-off under it
+    line(.7, W, main ? .55 : .3, main ? 1.6 : 1);          // light caught inside the bottom
+    line(-1, W, .95, main ? 1.3 : 1);                      // bright top rim
+    line(1, deep, main ? .95 : .6, 1);                     // deeper bottom rim
+    if (main) { // glint sliding along the glass
+      const gx = calm ? w * .3 : ((t * 90) % (w + 300)) - 150, gy = wave(g, gx, t, ph) - th * .66;
+      c.save(); c.translate(gx, gy); c.scale(1, .16); const gl = c.createRadialGradient(0, 0, 0, 0, 0, 80);
+      gl.addColorStop(0, "rgba(255,255,255,1)"); gl.addColorStop(1, "rgba(255,255,255,0)"); c.fillStyle = gl; c.beginPath(); c.arc(0, 0, 80, 0, 7); c.fill(); c.restore(); }
+  };
+  glass(hue + .1, 0, 7, false);
+  glass(hue - .1, 2.4, 6, false);
+  glass(hue, 1.3, 13, true);
 }
 function ribbonPos(i, n, it, g, t) { const x0 = 80, x1 = g.w - 90, step = Math.min(76, (x1 - x0) / Math.max(1, n)), x = x0 + step * (i + .5); return [x, wave(g, x, t, 1.3) - 2]; }
 function ribbonItem(c, it, x, y, t, hov) {
@@ -1528,6 +1558,24 @@ function notify(title, body) {
 let lastInput = Date.now(), saverOn = false, saverRaf = 0;
 ["pointermove", "pointerdown", "keydown", "wheel", "touchstart"].forEach(ev => addEventListener(ev, () => { lastInput = Date.now(); if (saverOn && Date.now() - saverStart > 900) stopSaver(); }, true));
 let saverStart = 0;
+function glassBubble(x, bx, by, r, tint = [140, 217, 255]) {
+  // body: faint tint, deeper toward the lower right
+  let g = x.createRadialGradient(bx - r * .3, by - r * .35, r * .05, bx, by, r);
+  g.addColorStop(0, `rgba(255,255,255,.16)`); g.addColorStop(.6, `rgba(${tint},.12)`); g.addColorStop(.86, `rgba(${tint.map(v => v * .6)},.26)`); g.addColorStop(.97, "rgba(255,255,255,.85)"); g.addColorStop(1, "rgba(255,255,255,0)");
+  x.fillStyle = g; x.beginPath(); x.arc(bx, by, r, 0, 7); x.fill();
+  // iridescent rim
+  if (x.createConicGradient) { const cg = x.createConicGradient(3.6, bx, by); [[0, "255,140,210"], [.2, "255,236,140"], [.4, "140,255,200"], [.6, "120,190,255"], [.8, "210,150,255"], [1, "255,140,210"]].forEach(([o, c]) => cg.addColorStop(o, `rgba(${c},.45)`));
+    x.save(); x.beginPath(); x.arc(bx, by, r * .985, 0, 7); x.arc(bx, by, r * .86, 0, 7, true); x.clip("evenodd"); x.fillStyle = cg; x.fillRect(bx - r, by - r, 2 * r, 2 * r); x.restore(); }
+  // main highlight (soft ellipse, upper left) and small window glint
+  x.save(); x.translate(bx - r * .32, by - r * .42); x.rotate(-.5); x.scale(1, .58);
+  g = x.createRadialGradient(0, 0, 0, 0, 0, r * .42); g.addColorStop(0, "rgba(255,255,255,.95)"); g.addColorStop(.45, "rgba(255,255,255,.55)"); g.addColorStop(1, "rgba(255,255,255,0)");
+  x.fillStyle = g; x.beginPath(); x.arc(0, 0, r * .42, 0, 7); x.fill(); x.restore();
+  x.beginPath(); x.arc(bx - r * .42, by - r * .5, r * .07, 0, 7); x.fillStyle = "rgba(255,255,255,.95)"; x.fill();
+  // reflected light on the lower right
+  x.save(); x.translate(bx + r * .28, by + r * .6); x.rotate(-.35); x.scale(1, .4);
+  g = x.createRadialGradient(0, 0, 0, 0, 0, r * .36); g.addColorStop(0, "rgba(255,255,255,.55)"); g.addColorStop(1, "rgba(255,255,255,0)");
+  x.fillStyle = g; x.beginPath(); x.arc(0, 0, r * .36, 0, 7); x.fill(); x.restore();
+}
 function startSaver() {
   const c = $("#saver"), x = c.getContext("2d"), dpr = devicePixelRatio || 1, w = innerWidth, h = innerHeight;
   c.width = w * dpr; c.height = h * dpr; c.style.display = "block"; saverOn = true; saverStart = Date.now();
@@ -1538,9 +1586,7 @@ function startSaver() {
     const dt = Math.min(.05, (now - last) / 1000); last = now; x.setTransform(dpr, 0, 0, dpr, 0, 0);
     const bg = x.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, "#05142f"); bg.addColorStop(1, "#02081a"); x.fillStyle = bg; x.fillRect(0, 0, w, h);
     bs.forEach(b => { if (!DS.calm_mode) { b[0] += b[2] * dt; b[1] += b[3] * dt; if (b[0] < b[4] || b[0] > w - b[4]) b[2] *= -1; if (b[1] < b[4] || b[1] > h - b[4]) b[3] *= -1; }
-      const [bx, by, , , r, c] = b, g = x.createRadialGradient(bx - r * .35, by - r * .4, r * .05, bx, by, r);
-      g.addColorStop(0, "rgba(255,255,255,.9)"); g.addColorStop(.25, `rgba(${c},.25)`); g.addColorStop(.8, `rgba(${c.map(v => v * .6)},.18)`); g.addColorStop(.96, "rgba(255,255,255,.6)"); g.addColorStop(1, "rgba(255,255,255,0)");
-      x.fillStyle = g; x.beginPath(); x.arc(bx, by, r, 0, 7); x.fill(); });
+      const [bx, by, , , r, c] = b; glassBubble(x, bx, by, r, c); });
     saverRaf = requestAnimationFrame(frame);
   };
   saverRaf = requestAnimationFrame(frame);
