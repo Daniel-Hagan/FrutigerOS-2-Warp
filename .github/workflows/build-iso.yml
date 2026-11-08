@@ -1,0 +1,41 @@
+# Builds the Frutiger OS ISO on GitHub's servers (free for public repositories).
+# Run it from the repository's Actions tab ("Build Frutiger OS ISO" → Run workflow),
+# or push a tag like v1.0. The finished ISO appears under the run's "Artifacts".
+name: Build Frutiger OS ISO
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make room on the runner
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Build inside Debian 12
+        run: |
+          chmod +x build.sh config/hooks/normal/* config/includes.chroot/usr/bin/* || true
+          docker run --rm --privileged -v "$PWD":/src -w /src debian:bookworm bash -c '
+            set -e
+            apt-get update
+            apt-get install -y live-build ca-certificates curl python3 xz-utils
+            ./build.sh'
+      - name: Checksum
+        run: sha256sum frutiger-os-*.iso | tee SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frutiger-os-iso
+          path: |
+            frutiger-os-*.iso
+            SHA256SUMS
+          compression-level: 0
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-log
+          path: build.log
