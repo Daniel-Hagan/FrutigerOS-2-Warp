@@ -23,6 +23,9 @@ Shared behaviour:
     middle click close the app's windows
     right click  pin / unpin
     orb (left end)  opens the Start menu (Whisker Menu); right-click = Personalize
+    hover        Aero Peek: a live glass thumbnail of the app's windows; rest on a thumbnail
+                 and every other window turns to faint glass
+    press        items squish like jelly (not in Calm mode)
 """
 import math, os, subprocess, time
 import gi
@@ -32,6 +35,10 @@ gi.require_version("GdkX11", "3.0")
 gi.require_version("Wnck", "3.0")
 from gi.repository import Gtk, Gdk, GdkX11, GdkPixbuf, Gio, GLib, Wnck  # noqa: F401
 import cairo
+import sys
+sys.path.insert(0, "/usr/lib/frutiger")
+import frutiger_settings as fs
+import frutiger_peek as peek
 
 HOME = os.path.expanduser("~")
 CONF = os.path.join(HOME, ".config/frutiger")
@@ -39,7 +46,188 @@ PIN_FILE = os.path.join(CONF, "orbit-pins")   # shared by Orbit, Aquarium Rail, 
 ORB_IMG = "/usr/share/frutiger/start-orb.png"
 DEFAULT_PINS = ["thunar.desktop", "firefox-esr.desktop", "xfce4-terminal.desktop",
                 "org.xfce.mousepad.desktop", "frutiger-personalize.desktop"]
-SELF_TITLES = {"Frutiger Orbit", "Frutiger Aquarium", "Frutiger Leaf Shelf"}
+SELF_TITLES = {"Frutiger Orbit", "Frutiger Aquarium", "Frutiger Leaf Shelf", "Frutiger Peek"}
+_cfg = [0.0, {}]
+
+
+def setting_on(key):
+    """Effective on/off for a desktop.ini switch (Calm mode applied), re-read every few seconds."""
+    if time.monotonic() - _cfg[0] > 3:
+        _cfg[0], _cfg[1] = time.monotonic(), fs.load()
+    return fs.on(_cfg[1], key)
+
+
+def jelly_scale(age):
+    """The press 'squish': (sx, sy) for a press `age` seconds ago (0.46 s long)."""
+    keys = ((0, 1, 1), (.22, 1.13, .85), (.46, .94, 1.08), (.70, 1.03, .97), (1, 1, 1))
+    p = age / .46
+    if not 0 <= p < 1:
+        return None
+    for (p0, x0, y0), (p1, x1, y1) in zip(keys, keys[1:]):
+        if p0 <= p <= p1:
+            k = (p - p0) / (p1 - p0)
+            return x0 + (x1 - x0) * k, y0 + (y1 - y0) * k
+    return None
+
+
+class PeekPopup(Gtk.Window):
+    """Aero Peek thumbnails for one taskbar item: a glass card with a live preview of each window."""
+    TW, TH, PAD = 190, 120, 10
+
+    def __init__(self, strip):
+        super().__init__(type=Gtk.WindowType.POPUP)
+        self.strip, self.item, self.pix, self.rects = strip, None, [], []
+        self.set_title("Frutiger Peek")
+        self.set_app_paintable(True)
+        vis = self.get_screen().get_rgba_visual()
+        if vis:
+            self.set_visual(vis)
+        self.add_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.POINTER_MOTION_MASK |
+                        Gdk.EventMask.ENTER_NOTIFY_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK)
+        self.connect("draw", self.on_draw)
+        self.connect("button-press-event", self.on_press)
+        self.connect("motion-notify-event", self.on_motion)
+        self.connect("enter-notify-event", lambda *a: self.strip.peek_hold(True))
+        self.connect("leave-notify-event", self.on_leave)
+        self.hot, self.peek_timer, self.refresh_timer = None, 0, 0
+
+    def show_for(self, item, x, y, edge):
+        self.item = item
+        wins = item.windows[:3]
+        n = max(1, len(wins))
+        W = self.PAD + n * (self.TW + self.PAD)
+        H = self.TH + 2 * self.PAD + 20
+        self.size = (W, H)
+        self.set_size_request(W, H)
+        self.resize(W, H)
+        g = self.strip.mon
+        if edge == "right":
+            px, py = x - W - 16, y - H / 2
+        elif edge == "top":
+            px, py = x - W / 2, y + 40
+        else:
+            px, py = x - W / 2, y - H - 34
+        px = max(g.x + 4, min(g.x + g.width - W - 4, px))
+        py = max(g.y + 4, min(g.y + g.height - H - 4, py))
+        self.move(int(px), int(py))
+        self.grab()
+        self.show_all()
+        try:
+            self.get_window().shape_combine_region(peek_shape(W, H), 0, 0) if not self.get_screen().is_composited() else None
+        except Exception:
+            pass
+        if not self.refresh_timer:
+            self.refresh_timer = GLib.timeout_add(1000, self.regrab)
+
+    def grab(self):
+        self.pix = [(w, peek.capture(w.get_xid(), self.TW, self.TH)) for w in self.item.windows[:3]] if self.item else []
+        self.queue_draw()
+
+    def regrab(self):
+        if not self.get_visible():
+            self.refresh_timer = 0
+            return False
+        self.grab()
+        return True
+
+    def hide_now(self):
+        if self.peek_timer:
+            GLib.source_remove(self.peek_timer)
+            self.peek_timer = 0
+        peek.unpeek()
+        self.hot = None
+        self.hide()
+
+    def on_draw(self, _w, cr):
+        W, H = self.size
+        cr.set_operator(cairo.OPERATOR_SOURCE)
+        cr.set_source_rgba(0, 0, 0, 0)
+        cr.paint()
+        cr.set_operator(cairo.OPERATOR_OVER)
+        rounded(cr, .5, .5, W - 1, H - 1, 10)
+        r, g, b = accent()
+        grad = cairo.LinearGradient(0, 0, 0, H)
+        grad.add_color_stop_rgba(0, min(1, r + .35), min(1, g + .35), min(1, b + .35), .82)
+        grad.add_color_stop_rgba(.5, r, g, b, .72)
+        grad.add_color_stop_rgba(1, r * .8, g * .8, b * .8, .8)
+        cr.set_source(grad)
+        cr.fill_preserve()
+        cr.set_source_rgba(1, 1, 1, .7)
+        cr.set_line_width(1)
+        cr.stroke()
+        self.rects = []
+        for i, (w, pix) in enumerate(self.pix):
+            x0, y0 = self.PAD + i * (self.TW + self.PAD), self.PAD + 18
+            cr.select_font_face("Noto Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+            cr.set_font_size(11)
+            name = w.get_name() or ""
+            name = name if len(name) < 30 else name[:28] + "…"
+            cr.set_source_rgba(0, 0, 0, .5)
+            cr.move_to(x0 + 1, y0 - 6)
+            cr.show_text(name)
+            cr.set_source_rgba(1, 1, 1, 1)
+            cr.move_to(x0, y0 - 7)
+            cr.show_text(name)
+            if pix:
+                pw, ph = pix.get_width(), pix.get_height()
+                px, py = x0 + (self.TW - pw) / 2, y0 + (self.TH - ph) / 2
+                Gdk.cairo_set_source_pixbuf(cr, pix, px, py)
+                cr.paint()
+            else:                                  # minimized: show the app's icon
+                pw = ph = 64
+                px, py = x0 + (self.TW - pw) / 2, y0 + (self.TH - ph) / 2
+                icon = self.strip.icon_for(self.item, 64)
+                if icon:
+                    Gdk.cairo_set_source_pixbuf(cr, icon, px, py)
+                    cr.paint_with_alpha(.85)
+            cr.rectangle(px - .5, py - .5, pw + 1, ph + 1)
+            cr.set_source_rgba(1, 1, 1, .9 if self.hot is w else .55)
+            cr.set_line_width(2 if self.hot is w else 1)
+            cr.stroke()
+            self.rects.append((w, x0, y0, self.TW, self.TH))
+        return False
+
+    def window_at(self, x, y):
+        for w, x0, y0, tw, th in self.rects:
+            if x0 <= x <= x0 + tw and y0 <= y <= y0 + th:
+                return w
+        return None
+
+    def on_motion(self, _w, ev):
+        w = self.window_at(ev.x, ev.y)
+        if w is not self.hot:
+            self.hot = w
+            self.queue_draw()
+            if self.peek_timer:
+                GLib.source_remove(self.peek_timer)
+                self.peek_timer = 0
+            if w is None:
+                peek.unpeek()
+            else:
+                self.peek_timer = GLib.timeout_add(450, self.start_peek, w)
+
+    def start_peek(self, w):
+        self.peek_timer = 0
+        if self.hot is w and not w.is_minimized():
+            peek.peek({w.get_xid()})
+        return False
+
+    def on_leave(self, *_):
+        self.hot = None
+        peek.unpeek()
+        self.strip.peek_hold(False)
+
+    def on_press(self, _w, ev):
+        w = self.window_at(ev.x, ev.y)
+        ts = ev.time or Gtk.get_current_event_time()
+        self.hide_now()
+        if w:
+            w.activate(ts)
+        return True
+
+
+def peek_shape(W, H):
+    return shape_region(rects=[(0, 0, W, H)])
 
 
 # ---------------------------------------------------------------- settings
@@ -93,6 +281,25 @@ def app_for_window(w):
                 if info:
                     return info
     return None
+
+
+def shape_region(circles=(), rects=(), ellipses=()):
+    """A cairo.Region made of circles (x, y, r), rectangles (x, y, w, h) and
+    ellipses (x, y, rx, ry), built from 3-px stripes. Used as the window's
+    shape so only what's drawn exists on screen — no box around the widget
+    even when no compositor is running (VMs, old graphics)."""
+    reg = cairo.Region()
+    for x, y, w, h in rects:
+        reg.union(cairo.RectangleInt(int(x), int(y), max(1, int(w)), max(1, int(h))))
+    for x, y, r in circles:
+        ellipses = list(ellipses) + [(x, y, r, r)]
+    for x, y, rx, ry in ellipses:
+        for yy in range(int(y - ry), int(y + ry) + 1, 3):
+            k = 1 - ((yy + 1.5 - y) / max(1, ry)) ** 2
+            if k > 0:
+                half = rx * math.sqrt(k)
+                reg.union(cairo.RectangleInt(int(x - half), yy, max(1, int(2 * half)), 3))
+    return reg
 
 
 def set_strut(gtkwin, side, size, start, end):
@@ -185,7 +392,10 @@ class Strip(Gtk.Window):
         for sig in ("window-opened", "window-closed", "active-window-changed"):
             self.screen.connect(sig, lambda *a: self.refresh())
         self.items, self.pos = [], {}
+        self._label_rect = None
         self.hover = None
+        self.jelly = {}                 # item key -> press time
+        self.peek_popup, self.peek_timer, self.peek_hide_timer, self.peek_inside = None, 0, 0, False
         self.t0 = time.monotonic()
         self.place()
         self.refresh()
@@ -241,9 +451,24 @@ class Strip(Gtk.Window):
             set_strut(self, "top", h, g.x, g.x + g.width - 1)
         elif self.EDGE == "right":
             set_strut(self, "right", w, g.y, g.y + g.height - 1)
-        # only the strip itself takes clicks; the headroom is click-through
-        self.input_shape_combine_region(cairo.Region(cairo.RectangleInt(x, y, w, h)))
+        self.apply_shape()
         return False
+
+    def base_shape(self):
+        """Shape parts that are always there: (circles, rects, ellipses)."""
+        return [], [self.rect], []
+
+    def apply_shape(self, label_rect=None):
+        circles, rects, ellipses = self.base_shape()
+        circles = list(circles) + [(x, y, self.item_radius + 14) for x, y in self.pos.values()]
+        if self.ORB:
+            ox, oy = self.orb_center()
+            circles.append((ox, oy, self.ORB / 2 + 2))
+        rects = list(rects) + ([label_rect] if label_rect else [])
+        key = (tuple((int(a), int(b), int(c)) for a, b, c in circles), tuple(tuple(int(v) for v in r) for r in rects))
+        if key != getattr(self, "_shape_key", None):
+            self._shape_key = key
+            self.shape_combine_region(shape_region(circles, rects, ellipses))
 
     # ---- model
     def app_of(self, w):
@@ -324,8 +549,19 @@ class Strip(Gtk.Window):
             if hov:
                 x, y = x + dx, y + dy
             self.pos[it.key] = (x, y)
-            self.draw_item(cr, it, x, y, t, hov)
+            js = jelly_scale(time.monotonic() - self.jelly[it.key]) if it.key in self.jelly else None
+            if js:
+                cr.save()
+                cr.translate(x, y)
+                cr.scale(*js)
+                cr.translate(-x, -y)
+                self.draw_item(cr, it, x, y, t, hov)
+                cr.restore()
+            else:
+                self.jelly.pop(it.key, None)
+                self.draw_item(cr, it, x, y, t, hov)
         self.draw_foreground(cr, t)
+        self._label_rect = None
         if self.ORB:
             ox, oy = self.orb_center()
             Gdk.cairo_set_source_pixbuf(cr, self.orb, ox - self.ORB / 2, oy - self.ORB / 2)
@@ -341,6 +577,8 @@ class Strip(Gtk.Window):
                 self.draw_label(cr, self.hover, self.rect[0] - 90, y + 11)
             else:
                 self.draw_label(cr, self.hover, x, y - r - 6)
+        if self.get_realized():
+            self.apply_shape(self._label_rect)
         return False
 
     def draw_foreground(self, cr, t):
@@ -370,6 +608,7 @@ class Strip(Gtk.Window):
         w, h = e.width + 20, 22
         x = min(max(4, cx - w / 2), self.W - w - 4)
         y = max(2, bottom - h)
+        self._label_rect = (x - 2, y - 2, w + 4, h + 4)
         rounded(cr, x, y, w, h, 11)
         cr.set_source_rgba(.04, .16, .28, .78)
         cr.fill_preserve()
@@ -396,6 +635,50 @@ class Strip(Gtk.Window):
         if it is not self.hover:
             self.hover = it
             self.queue_draw()
+            self.peek_hover(it)
+
+    # ---- Aero Peek
+    def peek_hover(self, it):
+        if self.peek_timer:
+            GLib.source_remove(self.peek_timer)
+            self.peek_timer = 0
+        if it is not None and it.running and setting_on("aero_peek"):
+            if self.peek_hide_timer:
+                GLib.source_remove(self.peek_hide_timer)
+                self.peek_hide_timer = 0
+            self.peek_timer = GLib.timeout_add(420, self.peek_show, it)
+        elif not self.peek_inside:
+            self.peek_schedule_hide()
+
+    def peek_show(self, it):
+        self.peek_timer = 0
+        if self.hover is not it or it.key not in self.pos:
+            return False
+        if self.peek_popup is None:
+            self.peek_popup = PeekPopup(self)
+        x, y = self.pos[it.key]
+        wx, wy = self.get_window().get_origin()[1:] if self.get_window() else (0, 0)
+        self.peek_popup.show_for(it, wx + x, wy + y, self.EDGE)
+        return False
+
+    def peek_hold(self, inside):
+        self.peek_inside = inside
+        if inside:
+            if self.peek_hide_timer:
+                GLib.source_remove(self.peek_hide_timer)
+                self.peek_hide_timer = 0
+        elif self.hover is None:
+            self.peek_schedule_hide()
+
+    def peek_schedule_hide(self):
+        if self.peek_popup and self.peek_popup.get_visible() and not self.peek_hide_timer:
+            self.peek_hide_timer = GLib.timeout_add(300, self.peek_hide)
+
+    def peek_hide(self):
+        self.peek_hide_timer = 0
+        if self.peek_popup and not self.peek_inside:
+            self.peek_popup.hide_now()
+        return False
 
     def on_motion(self, _w, ev):
         self.set_hover(self.hit(ev.x, ev.y))
@@ -409,6 +692,10 @@ class Strip(Gtk.Window):
         it = self.hit(ev.x, ev.y)
         if not it:
             return False
+        if self.peek_popup:
+            self.peek_popup.hide_now()
+        if setting_on("window_effects"):                    # jelly squish (off in Calm mode)
+            self.jelly[it.key] = time.monotonic()
         if ev.button == 3:                                   # pin / unpin
             ids = [a.get_id() for a in load_pins()]
             if it.pinned:

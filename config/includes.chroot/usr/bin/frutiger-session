@@ -17,8 +17,11 @@ start_compositor() {
     xfconf-query -c xfwm4 -p /general/use_compositing -s false
     sleep 0.5
     # shellcheck disable=SC2086
-    if ! picom --config /etc/xdg/picom/frutiger.conf -b $flags; then
-      xfconf-query -c xfwm4 -p /general/use_compositing -s true      # no 3D: xfwm4's own compositor
+    picom --config /etc/xdg/picom/frutiger.conf -b $flags
+    sleep 1.5
+    if ! pgrep -u "$(id -u)" -x picom >/dev/null; then
+      # picom can start and then die when there's no 3D (VMs, old GPUs): use xfwm4's compositor
+      xfconf-query -c xfwm4 -p /general/use_compositing -s true
     fi
   else
     xfconf-query -c xfwm4 -p /general/use_compositing -s true
@@ -36,6 +39,8 @@ fi
 if [ -d /run/live ]; then
   DESK=$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop"); mkdir -p "$DESK"
   for src in /usr/share/applications/install-debian.desktop /usr/share/applications/calamares.desktop; do
+    # Debian's live session may already have put an installer icon there
+    if grep -lqsE "^Exec=.*(install-debian|calamares)" "$DESK"/*.desktop; then break; fi
     if [ -f "$src" ] && [ ! -e "$DESK/install-frutiger-os.desktop" ]; then
       cp "$src" "$DESK/install-frutiger-os.desktop"; chmod +x "$DESK/install-frutiger-os.desktop"
       gio set "$DESK/install-frutiger-os.desktop" metadata::xfce-exe-checksum \
@@ -69,9 +74,10 @@ fi
 
 start_compositor
 
-# Desktop daemon (wallpaper modes, live effects, weather, screensaver) and gadgets
+# Desktop daemon (wallpaper modes, live effects, weather, screensaver), gadgets and Aero touches (shine, rain on glass, peek corner)
 pgrep -u "$(id -u)" -f /usr/bin/frutiger-desktopd >/dev/null || setsid /usr/bin/frutiger-desktopd >/dev/null 2>&1 &
 pgrep -u "$(id -u)" -f /usr/bin/frutiger-gadgets  >/dev/null || setsid /usr/bin/frutiger-gadgets  >/dev/null 2>&1 &
+pgrep -u "$(id -u)" -f /usr/bin/frutiger-aero     >/dev/null || setsid /usr/bin/frutiger-aero     >/dev/null 2>&1 &
 
 frutiger-taskbar "$(cat "$CONF/taskbar" 2>/dev/null || echo dock)"
 

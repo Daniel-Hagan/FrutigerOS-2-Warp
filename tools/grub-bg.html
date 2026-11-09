@@ -1,13 +1,18 @@
 <!DOCTYPE html><html><head><meta charset="utf-8"><style>
 html,body{margin:0;width:1920px;height:1080px;overflow:hidden;font-family:"Segoe UI","Noto Sans","Nunito Sans",sans-serif}
-#bg{position:absolute;inset:0;background:url(file:///home/claude/frutiger-os/config/includes.chroot/usr/share/plymouth/themes/frutiger/background.png) center/cover}
-#bub{position:absolute;left:50%;top:6%;width:300px;height:300px;margin-left:-150px}
-h1{position:absolute;top:35%;left:0;right:0;text-align:center;margin:0;font-weight:300;font-size:52px;color:#0d4f8f;letter-spacing:1px;text-shadow:0 0 14px #fff,0 0 4px #fff}
-#panel{position:absolute;left:31%;right:31%;top:49.5%;bottom:10%;border-radius:12px;
-  background:linear-gradient(rgba(255,255,255,.93),rgba(244,250,255,.88));
-  box-shadow:0 0 0 1px rgba(0,40,80,.45),inset 0 0 0 1px rgba(255,255,255,.9),0 14px 40px rgba(0,40,90,.35)}
-#panel::before{content:"";position:absolute;left:0;right:0;top:0;height:46px;border-radius:12px 12px 0 0;
-  background:linear-gradient(rgba(255,255,255,.95),rgba(220,238,252,.6) 50%,rgba(190,225,250,.5) 51%,rgba(230,244,255,.4));border-bottom:1px solid rgba(120,160,200,.5)}
-#panel span{position:absolute;left:24px;top:9px;font-size:22px;color:#1e3f7a}
-</style></head><body><div id="bg"></div><img id="bub" src="file:///home/claude/frutiger-os/config/includes.chroot/usr/share/plymouth/themes/frutiger/bubble.png">
+#bg{position:absolute;inset:0;background:url(file:///tmp/wp-aero.png) center/cover}
+#bub{position:absolute;left:50%;top:7%;width:280px;height:280px;margin-left:-140px;filter:drop-shadow(0 10px 30px rgba(0,30,80,.55))}
+h1{position:absolute;top:34.5%;left:0;right:0;text-align:center;margin:0;font-weight:300;font-size:54px;color:#fff;letter-spacing:1px;
+  text-shadow:0 0 18px rgba(140,215,255,.9),0 2px 6px rgba(0,20,60,.7)}
+#panel{position:absolute;left:31%;right:31%;top:49.5%;bottom:10%;border-radius:14px;overflow:hidden;
+  backdrop-filter:blur(22px) saturate(1.5);-webkit-backdrop-filter:blur(22px) saturate(1.5);
+  background:linear-gradient(rgba(255,255,255,.22),rgba(255,255,255,.06) 14%,rgba(255,255,255,0) 40%,rgba(255,255,255,.08)),
+    linear-gradient(rgba(6,38,92,.62),rgba(4,28,70,.70));
+  box-shadow:0 0 0 1px rgba(0,20,60,.55),inset 0 0 0 1px rgba(255,255,255,.55),0 18px 50px rgba(0,10,40,.55)}
+#panel::before{content:"";position:absolute;left:0;right:0;top:0;height:48px;
+  background:linear-gradient(rgba(255,255,255,.55),rgba(255,255,255,.18) 50%,rgba(255,255,255,.04) 51%,rgba(255,255,255,.12));border-bottom:1px solid rgba(255,255,255,.35)}
+#panel::after{content:"";position:absolute;left:-20%;top:-60%;width:80%;height:140%;transform:rotate(18deg);
+  background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.10),rgba(255,255,255,0))}
+#panel span{position:absolute;left:24px;top:10px;font-size:22px;color:#fff;text-shadow:0 1px 4px rgba(0,20,60,.8)}
+</style></head><body><div id="bg"></div><img id="bub" src="file:///home/claude/frutigeros-2-warp/config/includes.chroot/usr/share/plymouth/themes/frutiger/bubble.png">
 <h1>Frutiger OS</h1><div id="panel"><span>Choose how to start</span></div></body></html>

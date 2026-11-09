@@ -36,6 +36,33 @@ function lagoonLand(h1a, h1b, h2a, h2b, wa, wb, glint = .7) {
   <path d="M0 260 C200 210 380 250 560 280 S850 230 1000 250 V310 C800 300 600 330 400 310 S100 300 0 320Z" fill="url(#h2)"/>
   <path d="M0 333 C300 326 600 338 1000 332" stroke="#fff" stroke-opacity="${glint}" stroke-width="2" fill="none"/></svg>`);
 }
+// Aero: glossy ribbons of light sweeping across a deep glassy gradient (original design)
+function aeroScene(c) {
+  S.style.background = `radial-gradient(70% 60% at 62% 58%, ${c.light} 0%, ${c.mid} 38%, ${c.deep} 100%)`;
+  const ribbons = [
+    ["M-80 820 C 300 700, 640 520, 1000 600 S 1700 900, 2020 640 L 2020 760 C 1700 1000, 1300 700, 1000 720 S 300 860, -80 980 Z", 0, .55, 18],
+    ["M-80 900 C 400 760, 760 640, 1060 700 S 1650 980, 2020 760 L 2020 800 C 1650 1020, 1350 760, 1060 742 S 380 820, -80 950 Z", 1, .85, 3],
+    ["M-80 640 C 380 560, 700 420, 1080 470 S 1720 720, 2020 520 L 2020 560 C 1720 780, 1360 520, 1080 512 S 360 620, -80 700 Z", 2, .45, 10],
+    ["M-80 1000 C 500 880, 900 820, 1200 860 S 1800 1040, 2020 960 L 2020 1100 L -80 1100 Z", 0, .25, 30],
+  ];
+  add(`<svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice"><defs>
+    ${ribbons.map((r, i) => `<linearGradient id="rg${i}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${c.ribbon[r[1]]}" stop-opacity="0"/>
+      <stop offset=".35" stop-color="${c.ribbon[r[1]]}" stop-opacity="${r[2]}"/><stop offset=".55" stop-color="#ffffff" stop-opacity="${Math.min(1, r[2] + .2)}"/>
+      <stop offset=".8" stop-color="${c.ribbon[r[1]]}" stop-opacity="${r[2] * .8}"/><stop offset="1" stop-color="${c.ribbon[r[1]]}" stop-opacity="0"/></linearGradient>
+      <filter id="rb${i}" x="-10%" y="-50%" width="120%" height="200%"><feGaussianBlur stdDeviation="${r[3]}"/></filter>`).join("")}
+    <radialGradient id="flare"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".15" stop-color="${c.glow}" stop-opacity=".55"/><stop offset="1" stop-color="${c.glow}" stop-opacity="0"/></radialGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".16"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
+    ${ribbons.map((r, i) => `<path d="${r[0]}" fill="url(#rg${i})" filter="url(#rb${i})" style="mix-blend-mode:screen"/>`).join("")}
+    <path d="M-80 905 C 400 765, 760 645, 1060 705 S 1650 985, 2020 765" stroke="#fff" stroke-opacity=".9" stroke-width="2" fill="none" filter="url(#rb1)"/>
+    <path d="M-80 905 C 400 765, 760 645, 1060 705 S 1650 985, 2020 765" stroke="#fff" stroke-opacity=".8" stroke-width="1.2" fill="none"/>
+    <ellipse cx="1060" cy="700" rx="420" ry="160" fill="url(#flare)" style="mix-blend-mode:screen"/>
+    <rect width="1920" height="1080" fill="url(#sheen)"/></svg>`);
+  for (let i = 0; i < 34; i++) { const s = 1 + rnd() * 7, o = .05 + rnd() * .22;
+    add(`<div style="position:absolute;left:${rnd() * 100}%;top:${rnd() * 100}%;width:${s}vmin;height:${s}vmin;border-radius:50%;
+      background:radial-gradient(circle,rgba(${c.bokeh},${o * 1.6}) 0%,rgba(${c.bokeh},${o}) 45%,rgba(${c.bokeh},0) 70%)"></div>`); }
+  bubbles(9, 5, 95, 1.5, 8, .8);
+  S.insertAdjacentHTML("beforeend", `<div style="position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 50%,rgba(0,0,0,0) 55%,rgba(0,10,30,.45) 100%)"></div>`);
+}
 const scenes = {
   "lagoon-day"() { S.style.background = "radial-gradient(120% 70% at 78% 14%,rgba(255,255,240,.95) 0%,rgba(255,255,255,0) 38%),linear-gradient(180deg,#36a6f0 0%,#7fd0ff 45%,#d8f4ff 70%,#bfe9a6 71%,#6cc24a 82%,#2f8f2e 100%)";
     rays(78, 14, .16, 30); sun(78, 14, 11); lagoonLand("#b9f08a", "#3f9b2c", "#8ee05a", "#1f7a22", "#bff3ff", "#2aa0d8"); bubbles(16, 10, 95, 1, 7); },
@@ -85,6 +112,8 @@ const scenes = {
     for (let i = 0; i < 6; i++) { const x = rnd() * 85, y = rnd() * 85, s = 9 + rnd() * 5, r = rnd() * 360, c = ["#ff8a3c", "#fff", "#ff5a4a", "#ffd23c"][i % 4];
       add(`<svg style="position:absolute;left:${x}%;top:${y}%;width:${s}vmin;transform:rotate(${r}deg);filter:drop-shadow(0 1vmin 1vmin rgba(0,40,60,.4))" viewBox="0 0 100 40"><path d="M15 20 L0 6 Q6 20 0 34Z" fill="${c}"/><ellipse cx="55" cy="20" rx="42" ry="14" fill="${c}"/><ellipse cx="60" cy="15" rx="26" ry="5" fill="#fff" opacity=".5"/></svg>`); }
     rays(40, 40, .08, 70); },
+  aero() { aeroScene({ deep: "#021433", mid: "#0757b8", light: "#2fa8f5", glow: "#bfeaff", ribbon: ["#9fe2ff", "#ffffff", "#5cc8ff"], bokeh: "180,230,255" }); },
+  "aero-emerald"() { aeroScene({ deep: "#02241c", mid: "#0a7a5c", light: "#2fd6a0", glow: "#d2ffe9", ribbon: ["#a8ffd8", "#ffffff", "#5cf0c0"], bokeh: "190,255,225" }); },
   bubbles() { S.style.background = "radial-gradient(80% 80% at 70% 20%,#d8f6ff 0%,#6cc8f0 35%,#1d7fc0 75%,#0b4a80 100%)"; rays(70, 20, .12, 60); bubbles(40, -10, 100, 2, 22); },
 };
 (scenes[name] || scenes["lagoon-day"])();

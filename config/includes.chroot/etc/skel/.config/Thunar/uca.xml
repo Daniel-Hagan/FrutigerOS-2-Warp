@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<actions>
+<action>
+	<icon>utilities-terminal</icon>
+	<name>Open Terminal Here</name>
+	<submenu></submenu>
+	<unique-id>1700000000000001-1</unique-id>
+	<command>exo-open --working-directory %f --launch TerminalEmulator</command>
+	<description>Open a terminal in this folder</description>
+	<range></range>
+	<patterns>*</patterns>
+	<startup-notify/>
+	<directories/>
+</action>
+<action>
+	<icon>preferences-desktop-wallpaper</icon>
+	<name>Set as Desktop Wallpaper</name>
+	<submenu></submenu>
+	<unique-id>1700000000000002-2</unique-id>
+	<command>frutiger-wallpaper %f</command>
+	<description>Use this picture as your Frutiger OS wallpaper</description>
+	<range>1-1</range>
+	<patterns>*</patterns>
+	<image-files/>
+</action>
+<action>
+	<icon>preferences-desktop-wallpaper</icon>
+	<name>Use Folder as Wallpaper Slideshow</name>
+	<submenu></submenu>
+	<unique-id>1700000000000003-3</unique-id>
+	<command>frutiger-wallpaper --folder %f</command>
+	<description>Cycle through the pictures in this folder</description>
+	<range>1-1</range>
+	<patterns>*</patterns>
+	<directories/>
+</action>
+</actions>

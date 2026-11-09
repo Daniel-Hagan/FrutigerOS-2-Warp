@@ -36,14 +36,9 @@ class Sundial(Strip):
         super().place()
         self.orb_hit = self.center() + (self.ORB / 2,)
 
-    def after_realize(self):                               # click only on the dial, not the corners
+    def base_shape(self):                                  # the dial (+ its soft shadow), not the square
         cx, cy = self.center()
-        reg = cairo.Region()
-        for y in range(int(cy - R), int(cy + R), 4):
-            half = math.sqrt(max(0, R * R - (y + 2 - cy) ** 2))
-            reg.union(cairo.RectangleInt(int(cx - half), y, int(2 * half), 4))
-        self.input_shape_combine_region(reg)
-        return False
+        return [(cx, cy + 2, R + 5)], [], []
 
     def draw_background(self, cr, w, h, top, t):
         cx, cy = self.center()

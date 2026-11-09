@@ -1,25 +1,61 @@
 # Builds the Frutiger OS ISO on GitHub's servers (free for public repositories).
-# Run it from the repository's Actions tab ("Build Frutiger OS ISO" → Run workflow),
-# or push a tag like v1.0. The finished ISO appears under the run's "Artifacts".
+# Run it from the Actions tab: "Build Frutiger OS ISO" → Run workflow.
+#
+# Every successful build gets the next version number automatically:
+#   1.1, 1.2 … 1.9, then 2.0, 2.1 … (the last number is kept as a git tag, e.g. v1.4)
+# To jump ahead (say to 2.0 for a big release), type the number in "Version" when you
+# run it; later builds then carry on from there (2.1, 2.2 …).
+# The ISO is named frutiger-os-<version>-amd64.hybrid.iso and shows up under the
+# run's "Artifacts" as frutiger-os-<version>-iso.
 name: Build Frutiger OS ISO
 on:
   workflow_dispatch:
-  push:
-    tags: ["v*"]
+    inputs:
+      version:
+        description: "Version (leave empty for the next one automatically)"
+        required: false
+        default: ""
+permissions:
+  contents: write          # to save the version tag after a successful build
+concurrency:
+  group: frutiger-iso      # one build at a time, so two builds never get the same number
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need the tags to find the last version
+      - name: Pick the version number
+        id: ver
+        run: |
+          git fetch --tags --force
+          last=$(git tag -l 'v[0-9]*.[0-9]*' --sort=-v:refname | head -n1 | sed 's/^v//')
+          if [ -z "$last" ]; then
+            next="1.1"                      # 1.0 was the first build
+          else
+            major=${last%%.*}; minor=${last#*.}
+            if [ "$minor" -ge 9 ]; then next="$((major + 1)).0"; else next="$major.$((minor + 1))"; fi
+          fi
+          want="${{ github.event.inputs.version }}"
+          if [ -n "$want" ]; then
+            if ! echo "$want" | grep -Eq '^[0-9]+\.[0-9]$'; then echo "Version must look like 2.0"; exit 1; fi
+            if git rev-parse -q --verify "refs/tags/v$want" >/dev/null; then echo "v$want already exists"; exit 1; fi
+            next="$want"
+          fi
+          echo "Last version: ${last:-1.0} → building $next"
+          echo "version=$next" >> "$GITHUB_OUTPUT"
       - name: Make room on the runner
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h /
-      - name: Build inside Debian 12
+      - name: Build Frutiger OS ${{ steps.ver.outputs.version }} inside Debian 12
         run: |
           chmod +x build.sh config/hooks/normal/* config/includes.chroot/usr/bin/* || true
-          docker run --rm --privileged -v "$PWD":/src -w /src debian:bookworm bash -c '
+          docker run --rm --privileged -e FRUTIGER_VERSION="${{ steps.ver.outputs.version }}" \
+            -v "$PWD":/src -w /src debian:bookworm bash -c '
             set -e
             apt-get update
             apt-get install -y live-build ca-certificates curl python3 xz-utils
@@ -28,14 +64,18 @@ jobs:
         run: sha256sum frutiger-os-*.iso | tee SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
-          name: frutiger-os-iso
+          name: frutiger-os-${{ steps.ver.outputs.version }}-iso
           path: |
             frutiger-os-*.iso
             SHA256SUMS
           compression-level: 0
           retention-days: 14
+      - name: Save the version tag
+        run: |
+          git tag "v${{ steps.ver.outputs.version }}"
+          git push origin "v${{ steps.ver.outputs.version }}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: build-log
+          name: build-log-${{ steps.ver.outputs.version }}
           path: build.log

@@ -1,86 +1,214 @@
 #!/usr/bin/env python3
 """Frutiger OS — Aurora Ribbon taskbar.
 
-A translucent ribbon of light flows slowly along the bottom of the screen and
-app icons ride its waves. Running apps carry a soft halo, the active one a
-brighter halo with a sparkle; pinned apps that aren't running are dimmer.
+A thick glass ribbon of light flows slowly along the bottom of the screen. Its
+colour drifts along its length (around your glass colour) and a soft glow
+surrounds it; a glint slides along it and a few sparkles twinkle. Apps ride the
+ribbon as glass pearls: running apps glow in the ribbon's colour, the active one
+gets a bright ring, pinned apps that aren't running are dimmer.
 """
-import colorsys, math, sys
+import colorsys, math, sys, time
 sys.path.insert(0, "/usr/lib/frutiger")
 from frutiger_strip import Strip, run, accent, cairo
+import frutiger_settings as fs
+
+TH = 12          # half-thickness of the glass ribbon
+PEARL = 20       # pearl radius
 
 
 class Ribbon(Strip):
     TITLE = "Frutiger Aurora Ribbon"
     PRGNAME = "frutiger-ribbon"
-    STRIP_H = 58
+    STRIP_H = 66
     EXTRA_H = 44
     item_radius = 22
 
-    def wave(self, x, t, phase=0.0, amp=8):
-        return self.top + self.STRIP_H * .52 + math.sin(x / 130 + t * .8 + phase) * amp \
-            + math.sin(x / 57 - t * .5 + phase * 2) * amp * .35
+    # ---- shape of the ribbon and its colours
+    def wave(self, x, t, ph=0.0):
+        return self.top + self.STRIP_H * .5 + math.sin(x / 150 + t * .7 + ph) * 7 + math.sin(x / 63 - t * .45 + ph * 2) * 2.5
 
+    def hue_at(self, x, t, w):
+        base = colorsys.rgb_to_hls(*accent())[0]
+        return (base + .11 * math.sin(x / w * 6.283 * .9 + t * .12) + .07 * math.sin(x / 210 - t * .2)) % 1
+
+    def col(self, x, t, w, l=.62, s=.85):
+        return colorsys.hls_to_rgb(self.hue_at(x, t, w), l, s)
+
+    def hue_grad(self, w, t, alpha, l, s):
+        """A left-to-right gradient that follows the ribbon's colour and fades out at both ends."""
+        g = cairo.LinearGradient(0, 0, w, 0)
+        for k in range(11):
+            u = k / 10
+            e = max(0, min(1, u / .06, (1 - u) / .06))
+            g.add_color_stop_rgba(u, *self.col(u * w, t, w, l, s), alpha * e)
+        return g
+
+    @staticmethod
+    def white_fade(w, alpha):
+        g = cairo.LinearGradient(0, 0, w, 0)
+        for u, a in ((0, 0), (.07, alpha), (.93, alpha), (1, 0)):
+            g.add_color_stop_rgba(u, 1, 1, 1, a)
+        return g
+
+    def band(self, cr, w, t, ph, top, bot):
+        cr.move_to(-20, self.wave(-20, t, ph) + top)
+        for x in range(0, w + 21, 12):
+            cr.line_to(x, self.wave(x, t, ph) + top)
+        for x in range(w + 20, -21, -12):
+            cr.line_to(x, self.wave(x, t, ph) + bot)
+        cr.close_path()
+
+    def line(self, cr, w, t, ph, off):
+        cr.move_to(-20, self.wave(-20, t, ph) + off)
+        for x in range(0, w + 21, 12):
+            cr.line_to(x, self.wave(x, t, ph) + off)
+
+    # ---- drawing
     def draw_background(self, cr, w, h, top, t):
-        hue = colorsys.rgb_to_hls(*accent())[0]
-        bands = [(hue + .08, 0, 14, .30), (hue, 1.3, 10, .38), (hue - .1, 2.4, 7, .30)]
-        for bh, ph, thick, al in bands:
-            r, g, b = colorsys.hls_to_rgb(bh % 1, .62, .85)
-            cr.move_to(0, self.wave(0, t, ph) - thick)
-            for x in range(0, w + 24, 24):
-                cr.line_to(x, self.wave(x, t, ph) - thick)
-            for x in range(w + 24, -24, -24):
-                cr.line_to(x, self.wave(x, t, ph) + thick)
-            cr.close_path()
-            g_ = cairo.LinearGradient(0, 0, w, 0)
-            g_.add_color_stop_rgba(0, r, g, b, 0)
-            g_.add_color_stop_rgba(.08, r, g, b, al)
-            g_.add_color_stop_rgba(.92, r, g, b, al)
-            g_.add_color_stop_rgba(1, r, g, b, 0)
-            cr.set_source(g_)
+        now = time.monotonic()
+        if now - getattr(self, "_calm_at", -99) > 5:              # re-read Calm mode every few seconds
+            self._calm, self._calm_at = fs.load().get("calm_mode") == "on", now
+        calm = self._calm
+        # soft glow around the ribbon (added light)
+        cr.save()
+        cr.set_operator(cairo.OPERATOR_ADD)
+        cr.set_line_cap(cairo.LINE_CAP_ROUND)
+        for width, l in ((TH * 3.4, .6), (TH * 2, .7)):
+            self.line(cr, w, t, 0, 0)
+            cr.set_source(self.hue_grad(w, t, .22, l, .9))
+            cr.set_line_width(width)
+            cr.stroke()
+        cr.restore()
+        # faint echo ribbon behind
+        self.band(cr, w, t, 2.2, -4, 4)
+        cr.set_source(self.hue_grad(w, t, .35, .72, .8))
+        cr.fill()
+        self.line(cr, w, t, 2.2, -4)
+        cr.set_source(self.hue_grad(w, t, .6, .95, .5))
+        cr.set_line_width(.8)
+        cr.stroke()
+        # soft shadow under the glass (no blur in cairo: a few offset, fading layers)
+        for k, a in ((5, .08), (4, .1), (3, .12)):
+            self.band(cr, w, t, 0, -TH + k, TH + k)
+            cr.set_source_rgba(0, .1, .27, a)
             cr.fill()
-        cr.move_to(0, self.wave(0, t, 1.3))               # a bright filament through the middle
-        for x in range(0, w + 24, 24):
-            cr.line_to(x, self.wave(x, t, 1.3))
-        cr.set_source_rgba(1, 1, 1, .55)
+        # the glass ribbon: colour body, deeper underside, glossy streak, inner light, rims
+        self.band(cr, w, t, 0, -TH, TH)
+        cr.set_source(self.hue_grad(w, t, .62, .6, .85))
+        cr.fill()
+        self.band(cr, w, t, 0, TH * .05, TH)
+        cr.set_source(self.hue_grad(w, t, .5, .36, .85))
+        cr.fill()
+        self.band(cr, w, t, 0, -TH * .86, -TH * .46)
+        cr.set_source(self.white_fade(w, .78))
+        cr.fill()
+        self.band(cr, w, t, 0, -TH * .46, -TH * .1)
+        cr.set_source(self.white_fade(w, .18))
+        cr.fill()
+        self.line(cr, w, t, 0, TH * .68)
+        cr.set_source(self.white_fade(w, .5))
+        cr.set_line_width(1.4)
+        cr.stroke()
+        self.line(cr, w, t, 0, -TH)
+        cr.set_source(self.white_fade(w, .95))
         cr.set_line_width(1.2)
         cr.stroke()
+        self.line(cr, w, t, 0, TH)
+        cr.set_source(self.hue_grad(w, t, .95, .3, .8))
+        cr.set_line_width(1)
+        cr.stroke()
+        # a glint sliding along, and a few twinkles
+        gx = w * .32 if calm else ((t * 85) % (w + 300)) - 150
+        cr.save()
+        cr.translate(gx, self.wave(gx, t) - TH * .66)
+        cr.scale(1, .15)
+        g = cairo.RadialGradient(0, 0, 0, 0, 0, 90)
+        g.add_color_stop_rgba(0, 1, 1, 1, 1)
+        g.add_color_stop_rgba(1, 1, 1, 1, 0)
+        cr.set_source(g)
+        cr.arc(0, 0, 90, 0, 2 * math.pi)
+        cr.fill()
+        cr.restore()
+        for k in range(9):
+            x = w * (.1 + ((k * .618) % 1) * .8)
+            a = max(0, math.sin(t * (1.3 + k * .17) + k * 2.1)) ** 3
+            if a < .05:
+                continue
+            y = self.wave(x, t) - TH * (.55 if k % 2 else -.3)
+            s = 3 + 3 * a
+            cr.move_to(x, y - s)
+            for px, py in ((x + s * .22, y - s * .22), (x + s, y), (x + s * .22, y + s * .22), (x, y + s),
+                           (x - s * .22, y + s * .22), (x - s, y), (x - s * .22, y - s * .22)):
+                cr.line_to(px, py)
+            cr.close_path()
+            cr.set_source_rgba(1, 1, 1, .95 * a)
+            cr.fill()
+
+    def span(self, w):
+        return (74, w - 96) if w < 520 else (92, w - 110)
 
     def item_pos(self, i, n, it, w, top, t):
-        x0, x1 = 100, w - 130
-        step = min(76, (x1 - x0) / max(1, n))
+        x0, x1 = self.span(w)
+        step = min(66, (x1 - x0) / max(1, n))
         x = x0 + step * (i + .5)
-        return x, self.wave(x, t, 1.3) - 2
+        return x, self.wave(x, t)
 
     def draw_item(self, cr, it, x, y, t, hover):
-        a = 1.0 if it.running else .6
-        if it.running:
-            rad = 30 if it.active else 22
+        w = self.W
+        x0, x1 = self.span(w)
+        r0 = min(PEARL, min(66, (x1 - x0) / max(1, len(self.items))) * .46)
+        a = 1.0 if it.running else .72
+        R = r0 * (1.12 if hover else 1.06 if it.active else 1)
+        cr_, cg, cb = self.col(x, t, w, .62, .9)
+        if it.running:                                    # halo in the ribbon's colour
+            rr = R + (18 if it.active else 11)
             pulse = (.6 + .4 * math.sin(t * 4)) if it.attention else 1
-            g = cairo.RadialGradient(x, y, 2, x, y, rad)
-            g.add_color_stop_rgba(0, 1, 1, 1, (.75 if it.active else .45) * pulse)
-            g.add_color_stop_rgba(1, 1, 1, 1, 0)
+            g = cairo.RadialGradient(x, y, R * .6, x, y, rr)
+            g.add_color_stop_rgba(0, cr_, cg, cb, (.75 if it.active else .5) * pulse)
+            g.add_color_stop_rgba(1, cr_, cg, cb, 0)
+            cr.save()
+            cr.set_operator(cairo.OPERATOR_ADD)
             cr.set_source(g)
-            cr.arc(x, y, rad, 0, 2 * math.pi)
+            cr.arc(x, y, rr, 0, 2 * math.pi)
             cr.fill()
-        self.paint_icon(cr, it, x, y, 32, a)
-        if it.active:                                     # four-point sparkle
-            sx, sy = x + 14, y - 14
-            s = 5 + math.sin(t * 3) * 1.5
-            cr.move_to(sx, sy - s)
-            cr.line_to(sx + 1.2, sy - 1.2)
-            cr.line_to(sx + s, sy)
-            cr.line_to(sx + 1.2, sy + 1.2)
-            cr.line_to(sx, sy + s)
-            cr.line_to(sx - 1.2, sy + 1.2)
-            cr.line_to(sx - s, sy)
-            cr.line_to(sx - 1.2, sy - 1.2)
-            cr.close_path()
-            cr.set_source_rgba(1, 1, 1, .95)
+            cr.restore()
+        for k, sa in ((3, .12), (2, .1)):                 # soft shadow
+            cr.arc(x, y + k, R, 0, 2 * math.pi)
+            cr.set_source_rgba(0, .1, .27, sa)
             cr.fill()
+        # the pearl: clear glass tinted by the ribbon behind it
+        g = cairo.RadialGradient(x - R * .3, y - R * .35, R * .1, x, y, R)
+        g.add_color_stop_rgba(0, 1, 1, 1, .97 * a)
+        g.add_color_stop_rgba(.55, .92, .97, 1, .82 * a)
+        g.add_color_stop_rgba(.88, cr_ * .85, cg * .85, cb * .85, .75 * a)
+        g.add_color_stop_rgba(1, 1, 1, 1, .95 * a)
+        cr.set_source(g)
+        cr.arc(x, y, R, 0, 2 * math.pi)
+        cr.fill()
+        cr.arc(x, y, R - .5, 0, 2 * math.pi)
+        cr.set_source_rgba(1, 1, 1, .95 * a)
+        cr.set_line_width(1.2)
+        cr.stroke()
+        self.paint_icon(cr, it, x, y + 1, round(26 * r0 / PEARL), max(a, .8))
+        cr.save()                                         # gloss on top
+        cr.translate(x - R * .12, y - R * .52)
+        cr.scale(1, .42)
+        g = cairo.RadialGradient(0, 0, 0, 0, 0, R * .7)
+        g.add_color_stop_rgba(0, 1, 1, 1, .85)
+        g.add_color_stop_rgba(1, 1, 1, 1, 0)
+        cr.set_source(g)
+        cr.arc(0, 0, R * .7, 0, 2 * math.pi)
+        cr.fill()
+        cr.restore()
+        if it.active:                                     # bright ring with a coloured glow
+            for lw, al, (rr_, gg_, bb_) in ((5, .35, (cr_, cg, cb)), (2, .95, (1, 1, 1))):
+                cr.arc(x, y, R + 3, 0, 2 * math.pi)
+                cr.set_source_rgba(rr_, gg_, bb_, al)
+                cr.set_line_width(lw)
+                cr.stroke()
         n = len(it.windows)
         for j in range(min(n, 4) if n > 1 else 0):
-            cr.arc(x - (min(n, 4) - 1) * 4 + j * 8, y + 22, 2, 0, 2 * math.pi)
+            cr.arc(x - (min(n, 4) - 1) * 4 + j * 8, y + R + 7, 2, 0, 2 * math.pi)
             cr.set_source_rgba(1, 1, 1, .95)
             cr.fill()
 
