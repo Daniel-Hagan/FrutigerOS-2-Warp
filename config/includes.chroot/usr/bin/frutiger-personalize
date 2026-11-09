@@ -133,6 +133,19 @@ class Personalize(Gtk.Window):
         self.more.connect("color-set", lambda b: self.set_accent(self.hex(b.get_rgba())))
         sw.add(self.more)
         box.pack_start(sw, False, False, 0)
+        mg = Gtk.Grid(column_spacing=12, row_spacing=6)
+        self.glass_match = Gtk.Switch()
+        self.glass_match.set_active(self.cfg.get("glass_match") == "on")
+        self.glass_match.set_halign(Gtk.Align.END)
+        self.glass_match.set_valign(Gtk.Align.CENTER)
+        ml = Gtk.Label(xalign=0)
+        ml.set_markup("Match the wallpaper\n<small>The glass takes on the colors of your wallpaper: warm at sunset, deep blue at night. "
+                      "Picking a color above turns this off.</small>")
+        ml.set_hexpand(True)
+        ml.set_line_wrap(True)
+        mg.attach(ml, 0, 0, 1, 1)
+        mg.attach(self.glass_match, 1, 0, 1, 1)
+        box.pack_start(mg, False, False, 0)
         g = Gtk.Grid(column_spacing=12, row_spacing=8)
         g.attach(Gtk.Label(label="Color intensity", xalign=0), 0, 0, 1, 1)
         self.scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 10, 85, 1)
@@ -302,6 +315,18 @@ class Personalize(Gtk.Window):
         sync()
         box.pack_start(g, False, False, 0)
 
+        box.pack_start(heading("Aero touches"), False, False, 0)
+        g = Gtk.Grid(column_spacing=12, row_spacing=6)
+        for i, (k, n, d) in enumerate((
+                ("aero_shine", "Title-bar shine", "Light sweeps across a window's title bar when you switch to it"),
+                ("aero_peek", "Aero Peek", "Point at an app on the taskbar for live previews; rest on the bottom-right corner to see through every window"),
+                ("aero_caustics", "Light on the water", "Shimmering light on lakes, ponds and the aquarium"),
+                ("aero_wildlife", "Wildlife", "Now and then a butterfly, dragonfly or leaf drifts by; fireflies at night"),
+                ("aero_ripples", "Desktop ripples", "Click the empty desktop to send out a water ripple"),
+                ("aero_ambient", "Ambient sounds", "Soft water and the odd bird in the background"))):
+            self.switch(g, i, k, n, d)
+        box.pack_start(g, False, False, 0)
+
         box.pack_start(heading("Sounds, screensaver and effects"), False, False, 0)
         g = Gtk.Grid(column_spacing=12, row_spacing=6)
         self.switch(g, 0, "sounds", "Frutiger sounds", "Startup chime, water-drop notifications, bubble pops")
@@ -333,6 +358,9 @@ class Personalize(Gtk.Window):
 
     def set_accent(self, c):
         self.accent = c
+        self.accent_changed = True
+        if hasattr(self, "glass_match"):
+            self.glass_match.set_active(False)
         rgba = Gdk.RGBA()
         rgba.parse(c)
         self.more.set_rgba(rgba)
@@ -395,6 +423,13 @@ class Personalize(Gtk.Window):
         for k, sw in self.switches.items():
             c[k] = "on" if sw.get_active() else "off"
         c["wallpaper_mode"] = next(k for k, rb in self.wall_buttons.items() if rb.get_active())
+        c["glass_match"] = "on" if self.glass_match.get_active() else "off"
+        if getattr(self, "accent_changed", False):          # your own pick replaces the wallpaper-matched colour
+            try:
+                os.remove(os.path.join(CONF, "accent-own"))
+            except OSError:
+                pass
+            self.accent_changed = False
         sel = self.flow.get_selected_children()
         if sel:
             c["wallpaper"] = self.flow_names[sel[0].get_index()]

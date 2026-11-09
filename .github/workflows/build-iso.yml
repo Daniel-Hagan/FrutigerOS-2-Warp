@@ -3,11 +3,18 @@
 #
 # Every successful build gets the next version number automatically:
 #   1.1, 1.2 … 1.9, then 2.0, 2.1 … (the last number is kept as a git tag, e.g. v1.4)
+# To jump ahead (say to 2.0 for a big release), type the number in "Version" when you
+# run it; later builds then carry on from there (2.1, 2.2 …).
 # The ISO is named frutiger-os-<version>-amd64.hybrid.iso and shows up under the
 # run's "Artifacts" as frutiger-os-<version>-iso.
 name: Build Frutiger OS ISO
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (leave empty for the next one automatically)"
+        required: false
+        default: ""
 permissions:
   contents: write          # to save the version tag after a successful build
 concurrency:
@@ -31,6 +38,12 @@ jobs:
           else
             major=${last%%.*}; minor=${last#*.}
             if [ "$minor" -ge 9 ]; then next="$((major + 1)).0"; else next="$major.$((minor + 1))"; fi
+          fi
+          want="${{ github.event.inputs.version }}"
+          if [ -n "$want" ]; then
+            if ! echo "$want" | grep -Eq '^[0-9]+\.[0-9]$'; then echo "Version must look like 2.0"; exit 1; fi
+            if git rev-parse -q --verify "refs/tags/v$want" >/dev/null; then echo "v$want already exists"; exit 1; fi
+            next="$want"
           fi
           echo "Last version: ${last:-1.0} → building $next"
           echo "version=$next" >> "$GITHUB_OUTPUT"

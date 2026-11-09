@@ -10,15 +10,20 @@ and re-reads it whenever it changes:
                  city (Open-Meteo, no account; only contacted when this switch is on)
   * screensaver  starts frutiger-screensaver after N idle minutes (never over fullscreen apps)
   * sounds       turns event / click sounds on or off (Frutiger sound theme)
+  * Aero touches light on the water, wildlife (butterflies, dragonflies, leaves, fireflies),
+                 ripples when you click the empty desktop, glass that matches the wallpaper,
+                 and optional ambient sound (soft water and the odd bird)
 Calm mode switches off everything that moves.
 """
 import json, math, os, random, subprocess, sys, threading, time, urllib.parse, urllib.request
 sys.path.insert(0, "/usr/lib/frutiger")
 import frutiger_settings as fs
+import frutiger_glass as fg
 import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
-from gi.repository import Gtk, Gdk, GLib
+gi.require_version("Wnck", "3.0")
+from gi.repository import Gtk, Gdk, GLib, Wnck
 import cairo
 
 CACHE = os.path.expanduser("~/.cache/frutiger/weather.json")
@@ -69,13 +74,26 @@ class Overlay(Gtk.Window):
         self.drops = [[rnd.random() * self.W, rnd.random() * self.H, 500 + rnd.random() * 400] for _ in range(160)]
         self.flakes = [[rnd.random() * self.W, rnd.random() * self.H, 1 + rnd.random() * 2.5, rnd.random() * 6.28] for _ in range(120)]
         self.live = self.weather = None
+        self.scene, self.water, self.wildlife, self.ripples_on = "", False, False, False
+        self.night = self.pond = False
+        self.zoo = fg.Zoo()
+        self.ripples = []                 # (x, y, start time)
         self.t0 = time.monotonic()
         self.last = time.monotonic()
         self.timer = None
+        self._args = None
+        self.get_screen().connect("composited-changed", lambda *a: self._args and self.configure(*self._args))
 
-    def configure(self, live, weather):
+    def configure(self, live, weather, scene="", water=False, wildlife=False, ripples=False, pond=False):
+        self._args = (live, weather, scene, water, wildlife, ripples, pond)
         self.live, self.weather = live, weather
-        want = bool(live or weather)
+        self.scene, self.water, self.ripples_on, self.pond = scene, water and scene in fg.WATER, ripples, pond
+        self.night = scene in ("lagoon-night", "aurora")
+        if not wildlife:
+            self.zoo.clear()
+        self.wildlife = wildlife
+        want = bool(live or weather or self.water or wildlife or ripples)
+        want = want and self.get_screen().is_composited()   # without a compositor the layer would hide the wallpaper
         if want and not self.get_visible():
             self.show_all()
         elif not want and self.get_visible():
@@ -86,9 +104,21 @@ class Overlay(Gtk.Window):
             GLib.source_remove(self.timer)
             self.timer = None
 
+    def add_ripple(self, x, y):
+        disp = Gdk.Display.get_default()
+        g = (disp.get_primary_monitor() or disp.get_monitor(0)).get_geometry()
+        self.ripples.append((x - g.x, y - g.y, time.monotonic()))
+        self.queue_draw()
+
     def tick(self):
         now = time.monotonic()
         dt, self.last = min(.1, now - self.last), now
+        if self.wildlife:
+            self.zoo.update(dt, self.W, self.H, self.night, self.pond)
+        self.ripples = [r for r in self.ripples if now - r[2] < 1.7]
+        if not (self.live or self.weather or self.water or self.zoo.items or self.ripples or getattr(self, "_dirty", False)):
+            return True                       # nothing moving: don't repaint
+        self._dirty = bool(self.zoo.items or self.ripples)
         for b in self.bubbles:
             b[1] -= b[3] * dt
             if b[1] < -40:
@@ -114,16 +144,7 @@ class Overlay(Gtk.Window):
         t = time.monotonic() - self.t0
         if self.live:
             for x, y, r, _sp, ph in self.bubbles:
-                x += math.sin(t * .8 + ph) * 6
-                g = cairo.RadialGradient(x - r * .35, y - r * .4, r * .05, x, y, r)
-                g.add_color_stop_rgba(0, 1, 1, 1, .85)
-                g.add_color_stop_rgba(.2, 1, 1, 1, .2)
-                g.add_color_stop_rgba(.7, .55, .86, 1, .08)
-                g.add_color_stop_rgba(.95, 1, 1, 1, .5)
-                g.add_color_stop_rgba(1, 1, 1, 1, 0)
-                cr.set_source(g)
-                cr.arc(x, y, r, 0, 2 * math.pi)
-                cr.fill()
+                fg.glass_bubble(cr, x + math.sin(t * .8 + ph) * 6, y, r)
             wy = self.H * .87                                       # ripples on the lagoon's waterline
             for k in range(3):
                 p = (t * .2 + k / 3) % 1
@@ -136,6 +157,13 @@ class Overlay(Gtk.Window):
                 cr.set_source_rgba(1, 1, 1, .35 * (1 - p))
                 cr.set_line_width(1.5)
                 cr.stroke()
+        if self.water:
+            fg.caustics(cr, self.W, self.H, self.scene, t)
+        if self.zoo.items:
+            self.zoo.draw(cr)
+        now = time.monotonic()
+        for x, y, t0 in self.ripples:
+            fg.draw_ripple(cr, x, y, now - t0)
         if self.weather == "rain":
             cr.set_source_rgba(.85, .93, 1, .45)
             cr.set_line_width(1.2)
@@ -151,6 +179,81 @@ class Overlay(Gtk.Window):
         return False
 
 
+class Ambient:
+    """Soft water and the odd bird, quietly, through PipeWire (pw-play)."""
+    DIR = "/usr/share/sounds/frutiger/ambient"
+
+    def __init__(self):
+        self.on, self.stop = False, threading.Event()
+
+    def set(self, on):
+        if on == self.on:
+            return
+        self.on = on
+        if on:
+            self.stop = threading.Event()
+            threading.Thread(target=self.water, args=(self.stop,), daemon=True).start()
+            threading.Thread(target=self.birds, args=(self.stop,), daemon=True).start()
+        else:
+            self.stop.set()
+
+    @staticmethod
+    def play(path, vol, stop):
+        for cmd in (["pw-play", "--volume", str(vol), path], ["canberra-gtk-play", "-f", path]):
+            try:
+                p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except OSError:
+                continue
+            while p.poll() is None:
+                if stop.wait(.25):
+                    p.terminate()
+                    return
+            return
+
+    def water(self, stop):
+        path = os.path.join(self.DIR, "water.oga")
+        while not stop.is_set() and os.path.exists(path):
+            self.play(path, .45, stop)
+
+    def birds(self, stop):
+        files = sorted(f for f in os.listdir(self.DIR) if f.startswith("bird")) if os.path.isdir(self.DIR) else []
+        while files and not stop.wait(3.5 + random.random() * 8):
+            self.play(os.path.join(self.DIR, random.choice(files)), .35, stop)
+
+
+class ClickWatcher(threading.Thread):
+    """Sees left clicks anywhere (X RECORD extension) so the desktop can ripple; never blocks a click."""
+    def __init__(self, callback):
+        super().__init__(daemon=True)
+        self.callback = callback
+
+    def run(self):
+        try:
+            from Xlib import X, display
+            from Xlib.ext import record
+            from Xlib.protocol import rq
+            d = display.Display()
+            if not d.has_extension("RECORD"):
+                return
+            ctx = d.record_create_context(0, [record.AllClients], [{
+                "core_requests": (0, 0), "core_replies": (0, 0), "ext_requests": (0, 0, 0, 0), "ext_replies": (0, 0, 0, 0),
+                "delivered_events": (0, 0), "device_events": (X.ButtonPress, X.ButtonPress), "errors": (0, 0),
+                "client_started": False, "client_died": False}])
+
+            def got(reply):
+                if reply.category != record.FromServer or reply.client_swapped or not reply.data:
+                    return
+                data = reply.data
+                while data:
+                    ev, data = rq.EventField(None).parse_binary_value(data, d.display, None, None)
+                    if ev.type == X.ButtonPress and ev.detail == 1:
+                        GLib.idle_add(self.callback, ev.root_x, ev.root_y)
+
+            d.record_enable_context(ctx, got)
+        except Exception as e:
+            print("ripples off:", e, file=sys.stderr)
+
+
 class Daemon:
     def __init__(self):
         self.cfg, self.cfg_time = fs.load(), fs.mtime()
@@ -160,6 +263,11 @@ class Daemon:
         self.slide_at = 0
         self.weather_state = None       # None | "rain" | "snow" | "clear"
         self.saver = None
+        self.scene = ""
+        self.match_for = None
+        self.ambient = Ambient()
+        self.wnck = Wnck.Screen.get_default()
+        ClickWatcher(self.on_click).start()
         self.apply()
         GLib.timeout_add_seconds(3, self.watch_settings)
         GLib.timeout_add_seconds(30, self.tick_wallpaper)
@@ -187,8 +295,58 @@ class Daemon:
             self.fetch_weather_async()
 
     def refresh_overlay(self):
-        w = self.weather_state if (fs.on(self.cfg, "weather_effects") and self.weather_state in ("rain", "snow")) else None
-        self.overlay.configure(fs.on(self.cfg, "live_effects"), w)
+        c = self.cfg
+        w = self.weather_state if (fs.on(c, "weather_effects") and self.weather_state in ("rain", "snow")) else None
+        try:
+            pond = open(os.path.expanduser("~/.config/frutiger/taskbar")).read().strip() == "pond"
+        except OSError:
+            pond = False
+        self.overlay.configure(fs.on(c, "live_effects"), w, self.scene, fs.on(c, "aero_caustics"),
+                               fs.on(c, "aero_wildlife"), fs.on(c, "aero_ripples"), pond)
+        # rain on window glass is drawn by frutiger-aero; tell it whether it's raining
+        try:
+            os.makedirs(os.path.dirname(CACHE), exist_ok=True)
+            open(os.path.join(os.path.dirname(CACHE), "raining"), "w").write("1" if w == "rain" else "0")
+        except OSError:
+            pass
+        self.ambient.set(fs.on(c, "sounds") and fs.on(c, "aero_ambient"))
+        self.apply_glass_match()
+
+    # ---------- glass that matches the wallpaper
+    def apply_glass_match(self):
+        on = fs.on(self.cfg, "glass_match")
+        wall = self.current_wall[0] if self.current_wall else None
+        if on and wall and wall != self.match_for:
+            self.match_for = wall
+            def work(path=wall):
+                col = fg.wallpaper_color(path)
+                if col:
+                    subprocess.run(["frutiger-accent", "--match", col], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            threading.Thread(target=work, daemon=True).start()
+        elif not on and (self.match_for is not None or os.path.exists(os.path.expanduser("~/.config/frutiger/accent-own"))):
+            self.match_for = None
+            subprocess.Popen(["frutiger-accent", "--restore"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    # ---------- ripples: a left click that lands on the bare desktop
+    def on_click(self, x, y):
+        if not fs.on(self.cfg, "aero_ripples"):
+            return False
+        try:
+            self.wnck.force_update()
+            for w in reversed(self.wnck.get_windows_stacked()):
+                if w.is_minimized() or not w.is_visible_on_workspace(self.wnck.get_active_workspace() or w.get_workspace()):
+                    continue
+                gx, gy, gw, gh = w.get_geometry()
+                if gx <= x < gx + gw and gy <= y < gy + gh:
+                    if w.get_window_type() != Wnck.WindowType.DESKTOP:
+                        return False
+                    break
+        except Exception:
+            pass
+        self.overlay.add_ripple(x, y)
+        if fs.on(self.cfg, "click_sounds") and fs.on(self.cfg, "sounds"):
+            subprocess.Popen(["canberra-gtk-play", "-i", "message-new-instant"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return False
 
     # ---------- wallpaper
     def tick_wallpaper(self):
@@ -226,6 +384,8 @@ class Daemon:
         if (path, style) != self.current_wall:
             set_wallpaper(path, style)
             self.current_wall = (path, style)
+            self.scene = fg.scene_name(path)
+            self.refresh_overlay()
         return True
 
     # ---------- weather (only when the user turned it on)

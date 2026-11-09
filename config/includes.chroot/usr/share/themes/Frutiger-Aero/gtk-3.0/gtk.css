@@ -270,3 +270,33 @@ XfdesktopIconView.view:selected { background-image: linear-gradient(to bottom, a
 }
 #panel_window label, #panel_window menubar > menuitem, #panel_window menubar > menuitem label { color: white; text-shadow: 0 1px 2px alpha(black, .6); }
 #panel_window menubar > menuitem:hover { background-image: linear-gradient(to bottom, alpha(white, .4), alpha(white, .1)); border-radius: 4px; }
+
+/* ---------- Aero touches ---------- */
+/* jelly: pressed buttons squish their icon and flash with light */
+@keyframes frutiger-jelly {
+  0%   { -gtk-icon-transform: scale(1); }
+  22%  { -gtk-icon-transform: scale(1.18, .82); }
+  46%  { -gtk-icon-transform: scale(.92, 1.1); }
+  70%  { -gtk-icon-transform: scale(1.04, .97); }
+  100% { -gtk-icon-transform: scale(1); }
+}
+@keyframes frutiger-press-glow {
+  from { box-shadow: inset 0 1px 2px alpha(black, .3), 0 0 10px 2px alpha(#7fd4ff, .9); }
+  to   { box-shadow: inset 0 1px 2px alpha(black, .3), 0 0 0 0 alpha(#7fd4ff, 0); }
+}
+button:active image, button:checked:active image { animation: frutiger-jelly .46s ease-out; }
+button:active { animation: frutiger-press-glow .45s ease-out; }
+button.suggested-action:hover { background-image: linear-gradient(to bottom, #b0e2ff, #52b4f2 49%, #2a92e0 50%, #62c4ff); box-shadow: 0 0 8px alpha(#5abeff, .7); }
+
+/* Vista-style shine moving along progress bars */
+@keyframes frutiger-progress-shine {
+  from { background-position: -60% 0, 0 0; }
+  to   { background-position: 160% 0, 0 0; }
+}
+progressbar progress {
+  background-image: linear-gradient(to right, alpha(white, 0), alpha(white, .75), alpha(white, 0)),
+                    linear-gradient(to bottom, #c8ffb0, #5fd23a 50%, #2ea318 51%, #7ee05a);
+  background-size: 45% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  animation: frutiger-progress-shine 2.6s ease-in-out infinite;
+}

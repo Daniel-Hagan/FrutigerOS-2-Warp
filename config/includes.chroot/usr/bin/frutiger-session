@@ -74,9 +74,10 @@ fi
 
 start_compositor
 
-# Desktop daemon (wallpaper modes, live effects, weather, screensaver) and gadgets
+# Desktop daemon (wallpaper modes, live effects, weather, screensaver), gadgets and Aero touches (shine, rain on glass, peek corner)
 pgrep -u "$(id -u)" -f /usr/bin/frutiger-desktopd >/dev/null || setsid /usr/bin/frutiger-desktopd >/dev/null 2>&1 &
 pgrep -u "$(id -u)" -f /usr/bin/frutiger-gadgets  >/dev/null || setsid /usr/bin/frutiger-gadgets  >/dev/null 2>&1 &
+pgrep -u "$(id -u)" -f /usr/bin/frutiger-aero     >/dev/null || setsid /usr/bin/frutiger-aero     >/dev/null 2>&1 &
 
 frutiger-taskbar "$(cat "$CONF/taskbar" 2>/dev/null || echo dock)"
 

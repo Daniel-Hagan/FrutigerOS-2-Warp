@@ -546,7 +546,7 @@ body.calm #caustics{animation-play-state:paused}
 
 /* wildlife */
 #critters{position:absolute;inset:0;pointer-events:none;overflow:hidden}
-.critter{position:absolute;left:0;top:0;pointer-events:auto;will-change:transform;filter:drop-shadow(0 6px 5px rgba(0,30,70,.25))}
+.critter{position:absolute;left:0;top:0;pointer-events:none;will-change:transform;filter:drop-shadow(0 6px 5px rgba(0,30,70,.25))}
 .critter svg{display:block;overflow:visible}
 .critter .wl,.critter .wr{transform-box:fill-box}
 .bfly .wl{transform-origin:100% 50%;animation:flapl .16s ease-in-out infinite alternate}
@@ -573,6 +573,8 @@ body.calm #caustics{animation-play-state:paused}
 
 /* jelly buttons */
 .jelly{animation:jelly .46s ease-out!important}
+/* desktop icons squish their picture and label; the clickable box keeps its size so double-clicks always land */
+.dicon.jelly{animation:none!important}.dicon.jelly>*{animation:jelly .46s ease-out}
 @keyframes jelly{0%{scale:1}22%{scale:1.13 .85}46%{scale:.94 1.08}70%{scale:1.03 .97}100%{scale:1}}
 .btn.primary{color:#fff;text-shadow:0 1px 2px rgba(0,50,110,.7);border-color:#2a78bd;
   background:linear-gradient(#c6ecff,#7ccdf7 46%,#2e9ae0 50%,#4fb6f0 80%,#8ad8ff);box-shadow:inset 0 0 0 1px rgba(255,255,255,.55),0 1px 3px rgba(0,50,110,.3)}
@@ -608,7 +610,7 @@ body.dock .bub,body.dock .task,body.dock #orb{-webkit-box-reflect:below 2px line
 </style>
 </head>
 <body>
-<div id="grub"><div class="gver">Frutiger OS 1.2 &nbsp;·&nbsp; Lagoon</div><svg class="bbl" viewBox="0 0 320 320" aria-hidden="true"><use href="#bubblelogo"/></svg><h1>Frutiger OS</h1>
+<div id="grub"><div class="gver">Frutiger OS 2.0 &nbsp;·&nbsp; Lagoon</div><svg class="bbl" viewBox="0 0 320 320" aria-hidden="true"><use href="#bubblelogo"/></svg><h1>Frutiger OS</h1>
   <div id="gpanel"><div class="hd">Choose how to start</div>
     <div class="it on" data-i="0">Start Frutiger OS</div><div class="it" data-i="1">Start Frutiger OS (safe graphics)</div>
     <div id="gbar"><i></i></div><div class="tip">Use the arrow keys to choose, then press Enter</div></div></div>
@@ -620,7 +622,7 @@ body.dock .bub,body.dock .task,body.dock #orb{-webkit-box-reflect:below 2px line
   <div class="pic"><svg viewBox="0 0 320 320" aria-hidden="true"><use href="#bubblelogo"/></svg></div>
   <h2 style="font-weight:400">Aero</h2>
   <form id="loginf"><button class="go wide" aria-label="Log in">Tap to log in →</button></form>
-  <p>Frutiger OS 1.2 “Lagoon”</p></div></div>
+  <p>Frutiger OS 2.0 “Lagoon”</p></div></div>
 
 <div id="desktop">
   <div id="rays"></div>
@@ -790,7 +792,7 @@ const FS = {
   "Pictures": ["Lagoon.png","Bubbles.png","Aurora.png","Koi pond.png"],
   "Music": ["Ocean Drift.ogg","Glass Rain.ogg"],
   "Videos": ["Aquarium.webm"],
-  "Downloads": ["frutiger-os-1.2-amd64.iso"],
+  "Downloads": ["frutiger-os-2.0-amd64.iso"],
   "Computer": ["Local Disk (/)","Home","USB Drive"],
 };
 const fileIcon = n => FS[n] || /Disk|Drive/.test(n) ? "files" : /\.(png|jpg)$/.test(n) ? "img" : "doc";
@@ -825,14 +827,14 @@ const APPS = {
     body.innerHTML = `<textarea class="note" aria-label="Note">Welcome to Frutiger OS!\n\nThis preview runs in your browser. The real thing is a Debian-based live ISO with Xfce, an Aero glass GTK theme, the Bubble Dock, and a Start orb menu.\n\nTry: right-click (or long-press) the desktop, open Personalize, change the glass color or switch back to the classic taskbar.</textarea>`;
   }},
   term: { name: "Terminal", sub: "Command line", icon: "term", w: 560, h: 340, render(body) {
-    body.innerHTML = `<div class="term"><div class="out">Frutiger OS 1.2 (Lagoon) — type 'help'\n</div><span class="p">aero@frutiger</span>:<span class="d">~</span>$ <input aria-label="Command" spellcheck="false"></div>`;
+    body.innerHTML = `<div class="term"><div class="out">Frutiger OS 2.0 (Lagoon) — type 'help'\n</div><span class="p">aero@frutiger</span>:<span class="d">~</span>$ <input aria-label="Command" spellcheck="false"></div>`;
     const inp = body.querySelector("input"), out = body.querySelector(".out");
     body.onclick = () => inp.focus();
     const cmds = {
       help: () => "Commands: help, neofetch, ls, whoami, date, uname, echo, clear, open <app>",
       ls: () => FS.Home.join("  "),
       whoami: () => "aero", date: () => new Date().toString(), uname: () => "Linux frutiger 6.1.0-frutiger #1 SMP x86_64 GNU/Linux",
-      neofetch: () => `       .-~~~-.        aero@frutiger\n     .'  ~~   '.      -------------\n    /  (\\  /)   \\     OS: Frutiger OS 1.2 Lagoon\n   |    \\\\//     |    Base: Debian 12 (bookworm)\n   |     ||      |    DE: Xfce 4.18 + Aero glass\n    \\   ~~~~    /     WM: xfwm4 + picom (blur)\n     '.  ~~   .'      Theme: Frutiger-Aero [GTK3]\n       '-...-'        Icons: Frutiger-Aero-Icons`,
+      neofetch: () => `       .-~~~-.        aero@frutiger\n     .'  ~~   '.      -------------\n    /  (\\  /)   \\     OS: Frutiger OS 2.0 Lagoon\n   |    \\\\//     |    Base: Debian 12 (bookworm)\n   |     ||      |    DE: Xfce 4.18 + Aero glass\n    \\   ~~~~    /     WM: xfwm4 + picom (blur)\n     '.  ~~   .'      Theme: Frutiger-Aero [GTK3]\n       '-...-'        Icons: Frutiger-Aero-Icons`,
     };
     inp.onkeydown = e => {
       if (e.key !== "Enter") return;
@@ -928,7 +930,7 @@ const APPS = {
     draw();
   }},
   about: { name: "About Frutiger OS", sub: "Version and system info", icon: "about", w: 420, h: 380, render(body) {
-    body.innerHTML = `<div class="about"><svg class="logo"><use href="#logo"/></svg><h1>Frutiger OS</h1><div style="color:#5a6f86">Version 1.2 “Lagoon”</div>
+    body.innerHTML = `<div class="about"><svg class="logo"><use href="#logo"/></svg><h1>Frutiger OS</h1><div style="color:#5a6f86">Version 2.0 “Lagoon”</div>
     <table><tr><td>Base</td><td>Debian 12 “bookworm”</td></tr><tr><td>Kernel</td><td>Linux 6.1 LTS</td></tr><tr><td>Desktop</td><td>Xfce 4.18</td></tr><tr><td>Compositor</td><td>picom (dual-kawase blur)</td></tr><tr><td>Theme</td><td>Frutiger-Aero (GTK 3 + xfwm4)</td></tr></table>
     <p style="color:#5a6f86;font-size:12px">An homage to mid-2000s glossy, sky-and-water design.<br>Not affiliated with any OS vendor.</p></div>`;
   }},
@@ -2042,9 +2044,11 @@ window.__aero = (() => {
       Object.assign(cr, { pts, seg: 0, segT: 0, hold: 0, x: pts[0][0], y: pts[0][1], ang: 0 }); }
     else { el.className = "critter bfly"; el.innerHTML = svgB(BFLY[Math.floor(Math.random() * BFLY.length)]);
       const fromL = Math.random() < .5; Object.assign(cr, { dir: fromL ? 1 : -1, x: fromL ? -50 : w + 50, yb: h * (.25 + Math.random() * .45), sp: 55 + Math.random() * 35, ph: Math.random() * 6, flee: 0 }); }
-    el.onpointerdown = e => { e.stopPropagation(); cr.flee = 1; cr.life = Math.min(cr.life || 99, cr.t + 3); };
     zoo.appendChild(el); critters.push(cr);
   }
+  // a tap or click near a creature startles it (creatures never block clicks on what's underneath)
+  addEventListener("pointerdown", e => { critters.forEach(cr => { const r = cr.el.getBoundingClientRect();
+    if (Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2)) < 40) { cr.flee = 1; cr.life = Math.min(cr.life || 99, cr.t + 3); } }); }, true);
   function critterFrame(now) {
     const dt = Math.min(.05, (now - (critterFrame.last || now)) / 1000); critterFrame.last = now;
     const w = innerWidth, h = innerHeight;
@@ -2108,7 +2112,7 @@ window.__aero = (() => {
 
   // ---- jelly buttons
   document.addEventListener("pointerdown", e => {
-    const b = e.target.closest(".btn,.cap,#orb,#sorb,#oorb,#forb,.bub,.task,.go,.sw,.oitem"); if (!b || calm()) return;
+    const b = e.target.closest(".btn,.cap,#orb,#sorb,#oorb,#forb,.bub,.task,.go,.sw,.dicon,.oitem"); if (!b || calm()) return;
     b.classList.remove("jelly"); void b.offsetWidth; b.classList.add("jelly"); clearTimeout(b._jt); b._jt = setTimeout(() => b.classList.remove("jelly"), 470);
   }, true);
 

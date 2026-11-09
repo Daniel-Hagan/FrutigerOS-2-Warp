@@ -112,8 +112,27 @@ class Gadgets(Gtk.Window):
             self.load_photos()
             self.slide = Canvas(W, 118, self.draw_photo)
             self.box.pack_start(self.slide, False, False, 0)
+        kids = self.box.get_children()
+        self.reflect_src = kids[-1] if kids else None
+        if self.reflect_src is not None:                 # a faint mirror image under the bottom gadget
+            self.box.pack_start(Canvas(W, 36, self.draw_reflection, fps=1), False, False, 0)
         self.show_all()
         self.place()
+
+    def draw_reflection(self, cr, w, h):
+        src = self.reflect_src
+        if src is None or not src.get_realized():
+            return
+        sw, sh = src.get_allocated_width(), src.get_allocated_height()
+        cr.push_group()
+        cr.translate((w - sw) / 2, sh - 12)               # mirror about the gadget's bottom edge (12 px gap above us)
+        cr.scale(1, -1)
+        src.draw(cr)
+        cr.pop_group_to_source()
+        m = cairo.LinearGradient(0, 0, 0, h)
+        m.add_color_stop_rgba(0, 0, 0, 0, .26)
+        m.add_color_stop_rgba(1, 0, 0, 0, 0)
+        cr.mask(m)
 
     def glass(self, child):
         f = Gtk.Box()

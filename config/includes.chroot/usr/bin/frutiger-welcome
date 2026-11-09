@@ -8,9 +8,11 @@ Personalize.
 import os, re, subprocess, sys
 sys.path.insert(0, "/usr/lib/frutiger")
 import frutiger_settings as fs
+import frutiger_glass as fg
+import time
 import gi
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, Gdk, GdkPixbuf
+from gi.repository import Gtk, Gdk, GdkPixbuf, GLib
 
 CONF = os.path.expanduser("~/.config/frutiger")
 DONE = os.path.join(CONF, "welcome-done")
@@ -50,12 +52,15 @@ class Welcome(Gtk.Window):
         hero = Gtk.Box(spacing=16)
         hero.set_name("welcome-hero")
         hero.set_border_width(0)
-        try:
-            img = Gtk.Image.new_from_pixbuf(GdkPixbuf.Pixbuf.new_from_file_at_size(
-                "/usr/share/plymouth/themes/frutiger/bubble.png", 110, 110))
-            hero.pack_start(img, False, False, 14)
-        except Exception:
-            pass
+        # a slowly turning glass globe (stands still in Calm mode)
+        globe = Gtk.DrawingArea()
+        globe.set_size_request(110, 110)
+        t0 = time.monotonic()
+        calm = fs.load().get("calm_mode") == "on"
+        globe.connect("draw", lambda w, cr: fg.globe(cr, 110, 1.2 if calm else time.monotonic() - t0))
+        if not calm:
+            GLib.timeout_add(40, lambda: (globe.queue_draw(), globe.get_mapped() or not globe.get_realized() or True)[1])
+        hero.pack_start(globe, False, False, 14)
         hb = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         hb.set_valign(Gtk.Align.CENTER)
         hb.pack_start(label("Welcome to Frutiger OS", "big"), False, False, 0)

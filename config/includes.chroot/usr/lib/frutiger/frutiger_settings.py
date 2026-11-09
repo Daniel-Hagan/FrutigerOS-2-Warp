@@ -35,8 +35,17 @@ DEFAULTS = {
     "screensaver_minutes": "10",
     "window_effects": "on",            # window fades / glass open-close
     "calm_mode": "off",
+    # Aero touches
+    "aero_shine": "on",                # light sweeps across a title bar when you switch windows
+    "aero_peek": "on",                 # taskbar previews + bottom-right corner sees through windows
+    "aero_caustics": "on",             # shimmering light on the water in the wallpapers
+    "aero_wildlife": "on",             # butterflies, dragonflies, leaves; fireflies at night
+    "aero_ripples": "on",              # click the empty desktop for a water ripple
+    "aero_ambient": "off",             # soft water and birdsong
+    "glass_match": "off",              # glass colour follows the wallpaper
 }
-MOTION = {"live_effects", "weather_effects", "window_effects"}   # forced off by Calm mode
+MOTION = {"live_effects", "weather_effects", "window_effects",
+          "aero_shine", "aero_caustics", "aero_wildlife", "aero_ripples"}   # forced off by Calm mode
 
 
 def load():
