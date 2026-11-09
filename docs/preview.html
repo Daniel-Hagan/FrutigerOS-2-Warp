@@ -1451,9 +1451,21 @@ function drag(w, handle, resize) {
 /* ---------- Desktop icons ---------- */
 const DESK = [["files","Home"],["web","Web Browser"],["term","Terminal"],["notes","Welcome.txt"],["settings","Personalize"],["trash","Recycle Bin"]];
 $("#icons").innerHTML = DESK.map(([id, n]) => `<div class="dicon" data-app="${id}">${ico(id === "trash" ? "trash" : APPS[id].icon)}<div>${n}</div></div>`).join("");
+// Desktop icons: tap opens on touch screens; double-click (detected here, with the browser's dblclick as a backup) or Enter opens with a mouse
+let iconLastUp = { d: null, t: 0, x: 0, y: 0 }, iconLaunched = 0;
+const iconGo = d => { if (d._launched && Date.now() - d._launched < 600) return; d._launched = Date.now(); launch(d); };
+const iconSel = d => $("#icons").querySelectorAll(".dicon").forEach(x => x.classList.toggle("sel", x === d));
 $("#icons").querySelectorAll(".dicon").forEach(d => {
-  d.onclick = e => { $("#icons").querySelectorAll(".dicon").forEach(x => x.classList.toggle("sel", x === d)); if (e.pointerType === "touch" || matchMedia("(pointer:coarse)").matches) launch(d); };
-  d.ondblclick = () => launch(d);
+  d.tabIndex = 0; d.setAttribute("role", "button"); d.setAttribute("aria-label", d.textContent.trim());
+  d.addEventListener("pointerup", e => {
+    if (e.button > 0) return; iconSel(d);
+    if (e.pointerType !== "mouse" || matchMedia("(pointer:coarse)").matches) { iconGo(d); return; }
+    const now = Date.now(), near = Math.hypot(e.clientX - iconLastUp.x, e.clientY - iconLastUp.y) < 12;
+    if (iconLastUp.d === d && now - iconLastUp.t < 550 && near) { iconLastUp.d = null; iconGo(d); } else iconLastUp = { d, t: now, x: e.clientX, y: e.clientY };
+  });
+  d.onclick = e => { iconSel(d); if (!("pointerType" in e) && matchMedia("(pointer:coarse)").matches) iconGo(d); };
+  d.ondblclick = () => iconGo(d);
+  d.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); iconSel(d); iconGo(d); } };
 });
 const launch = d => d.dataset.app === "trash" ? open("files", "Downloads") : open(d.dataset.app);
 
@@ -1965,7 +1977,7 @@ window.__aero = (() => {
 
   // ---- jelly buttons
   document.addEventListener("pointerdown", e => {
-    const b = e.target.closest(".btn,.cap,#orb,#sorb,#oorb,#forb,.bub,.task,.go,.sw,.dicon,.oitem"); if (!b || calm()) return;
+    const b = e.target.closest(".btn,.cap,#orb,#sorb,#oorb,#forb,.bub,.task,.go,.sw,.oitem"); if (!b || calm()) return;
     b.classList.remove("jelly"); void b.offsetWidth; b.classList.add("jelly"); clearTimeout(b._jt); b._jt = setTimeout(() => b.classList.remove("jelly"), 470);
   }, true);
 
