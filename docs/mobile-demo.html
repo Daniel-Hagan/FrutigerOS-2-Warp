@@ -607,6 +607,88 @@ body.dock .bub,body.dock .task,body.dock #orb{-webkit-box-reflect:below 2px line
 
 /* Welcome Center globe */
 .wchero canvas.wcglobe{width:84px;height:84px;flex:none}
+
+/* ================= More glass ================= */
+/* clarity: a white haze layer that thickens as the glass gets more frosted */
+.glass{background:
+    linear-gradient(180deg,rgba(255,255,255,.55) 0%,rgba(255,255,255,.15) 48%,rgba(255,255,255,0) 50%,rgba(255,255,255,.12) 100%),
+    linear-gradient(rgba(255,255,255,var(--haze,.06)),rgba(255,255,255,var(--haze,.06))),
+    color-mix(in srgb,var(--accent) calc(var(--glass-alpha)*100%),transparent)}
+
+/* per-window glass layers sit in the frame (title bar and borders), under the window's content */
+.win>.titlebar,.win>.wbody{position:relative;z-index:1}
+.win>.gfx{position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:0;overflow:hidden;
+  padding:var(--tbh,30px) 7px 7px;box-sizing:border-box;
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
+.win.max>.gfx{border-radius:0}
+.gfx>i{position:absolute;inset:0;display:none}
+/* refraction: the wallpaper, slightly magnified around the window's centre, bending at the glass edges */
+.gfx .refr{filter:blur(.6px) saturate(1.35) brightness(1.08);opacity:.85;background-repeat:no-repeat}
+body.g-refract .gfx .refr{display:block}
+/* reflections: a soft sky and a few clouds in the glass that slide as the window moves */
+.gfx .refl{mix-blend-mode:screen;opacity:1;background-repeat:repeat;background-size:620px 400px;
+  background-image:
+    radial-gradient(ellipse 90px 22px at 14% 6%,rgba(255,255,255,.8),rgba(255,255,255,0) 70%),
+    radial-gradient(ellipse 60px 16px at 22% 9%,rgba(255,255,255,.6),rgba(255,255,255,0) 70%),
+    radial-gradient(ellipse 130px 26px at 62% 4%,rgba(255,255,255,.7),rgba(255,255,255,0) 70%),
+    radial-gradient(ellipse 70px 18px at 84% 8%,rgba(255,255,255,.55),rgba(255,255,255,0) 70%),
+    radial-gradient(ellipse 80px 20px at 40% 52%,rgba(255,255,255,.5),rgba(255,255,255,0) 70%),
+    linear-gradient(112deg,rgba(255,255,255,0) 30%,rgba(255,255,255,.5) 33%,rgba(255,255,255,.12) 35%,rgba(255,255,255,0) 38%,
+                    rgba(255,255,255,0) 70%,rgba(255,255,255,.35) 72%,rgba(255,255,255,0) 75%)}
+body.g-reflect .gfx .refl{display:block}
+/* frost creeping in from the corners while it snows */
+.gfx .frost{display:block;opacity:calc(var(--frost-a,0) * .75);transition:opacity 1s;
+  background:var(--frost-tex),radial-gradient(rgba(255,255,255,.55),rgba(255,255,255,.35));background-size:180px 180px,100% 100%;
+  -webkit-mask:radial-gradient(circle at 0 0,#000 var(--frost-r,0px),transparent calc(var(--frost-r,0px) + 60px)),
+    radial-gradient(circle at 100% 0,#000 var(--frost-r,0px),transparent calc(var(--frost-r,0px) + 60px)),
+    radial-gradient(circle at 0 100%,#000 var(--frost-r,0px),transparent calc(var(--frost-r,0px) + 60px)),
+    radial-gradient(circle at 100% 100%,#000 var(--frost-r,0px),transparent calc(var(--frost-r,0px) + 60px));
+  mask:radial-gradient(circle at 0 0,#000 var(--frost-r,0px),transparent calc(var(--frost-r,0px) + 60px)),
+    radial-gradient(circle at 100% 0,#000 var(--frost-r,0px),transparent calc(var(--frost-r,0px) + 60px)),
+    radial-gradient(circle at 0 100%,#000 var(--frost-r,0px),transparent calc(var(--frost-r,0px) + 60px)),
+    radial-gradient(circle at 100% 100%,#000 var(--frost-r,0px),transparent calc(var(--frost-r,0px) + 60px))}
+/* edge lighting: the rim catches light from the top-left of the screen, with a faint rainbow fringe opposite */
+.win>.gedge{position:absolute;inset:0;border-radius:inherit;pointer-events:none;z-index:3;padding:2.2px;box-sizing:border-box;display:none;
+  background:linear-gradient(var(--la,135deg),rgba(255,255,255,1) 0%,rgba(255,255,255,.55) 18%,rgba(255,255,255,.08) 42%,rgba(255,255,255,0) 58%,
+    rgba(255,150,215,.75) 74%,rgba(255,235,140,.7) 81%,rgba(140,255,210,.75) 88%,rgba(140,190,255,.8) 94%,rgba(255,255,255,.2) 100%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
+body.g-edges .win>.gedge{display:block}
+.pthumb .gfx,.pthumb .gedge{display:none!important}
+
+/* glass casts light: a soft tinted glow thrown onto the wallpaper behind each window */
+#castlayer{position:absolute;inset:0;pointer-events:none;overflow:hidden;display:none}
+body.g-cast #castlayer{display:block}
+#castlayer i{position:absolute;border-radius:18px;filter:blur(20px);mix-blend-mode:screen;opacity:.8;
+  background:radial-gradient(ellipse at 70% 70%,color-mix(in srgb,var(--c,var(--accent)) 45%,white),transparent 70%),
+             linear-gradient(135deg,transparent 30%,color-mix(in srgb,var(--c,var(--accent)) 65%,white) 80%)}
+
+/* taskbar hot-track: a glow in the app's own colour follows the pointer across its button */
+.task{position:relative}
+.task::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .25s;mix-blend-mode:screen;
+  background:radial-gradient(circle 22px at var(--hx,50%) 100%,rgba(255,255,255,.9),transparent 75%),
+             radial-gradient(circle 60px at var(--hx,50%) 105%,var(--hc,#7fd4ff),transparent 70%),
+             linear-gradient(transparent 55%,color-mix(in srgb,var(--hc,#7fd4ff) 45%,transparent))}
+body.g-hot .task:hover::before{opacity:1}
+body.g-hot.dock .task:hover::before{background:radial-gradient(circle 34px at var(--hx,50%) 100%,var(--hc,#7fd4ff),transparent 75%)}
+
+/* glass menus and tooltips */
+body.g-menus #ctx{background:linear-gradient(rgba(255,255,255,.82),rgba(232,244,255,.68) 50%,rgba(220,238,255,.62));
+  -webkit-backdrop-filter:blur(12px) saturate(1.5);backdrop-filter:blur(12px) saturate(1.5);border:1px solid rgba(255,255,255,.9);border-radius:7px;padding:4px;
+  box-shadow:0 0 0 1px rgba(0,40,90,.35),inset 0 1px 0 rgba(255,255,255,.9),0 8px 24px rgba(0,20,60,.35)}
+body.g-menus #ctx div:hover{border-color:rgba(90,170,240,.8);background:linear-gradient(rgba(220,240,255,.95),rgba(170,215,255,.85) 50%,rgba(140,200,255,.85) 51%,rgba(185,225,255,.9));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.8)}
+body.g-menus #ctx hr{border-top-color:rgba(120,160,210,.35)}
+body.g-menus #tip{background:linear-gradient(rgba(255,255,255,.86),rgba(225,240,255,.72));-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  border:1px solid rgba(255,255,255,.95);border-radius:5px;box-shadow:0 0 0 1px rgba(0,40,90,.35),0 4px 12px rgba(0,20,60,.3);color:#14365e}
+body.g-menus select{background:linear-gradient(rgba(255,255,255,.85),rgba(225,240,255,.75));border:1px solid rgba(90,140,200,.6);border-radius:4px}
+
+/* glass bloom: windows open out of a soft glow and dissolve into light when they close */
+body.g-bloom .win{animation:gbloomin .34s cubic-bezier(.2,.8,.3,1)}
+body.g-bloom .win.closing{animation:gbloomout .22s ease-in forwards}
+@keyframes gbloomin{0%{transform:scale(.93);opacity:0;filter:blur(10px) brightness(1.9)}55%{opacity:1;filter:blur(1px) brightness(1.25)}100%{transform:none;opacity:1;filter:none}}
+@keyframes gbloomout{0%{opacity:1;filter:none}100%{transform:scale(1.05);opacity:0;filter:blur(8px) brightness(2.1)}}
 </style>
 </head>
 <body>
@@ -882,7 +964,7 @@ const APPS = {
         ${tg("glass_match", "Match the wallpaper", "The glass slowly takes on the colors of your wallpaper: warm at sunset, deep blue at night")}
         <div class="swatches">${cols.map(c => `<div class="sw${c === cur ? " on" : ""}" data-c="${c}" style="background-color:${c}" title="${c}"></div>`).join("")}</div>
         <label class="row">Color intensity <input type="range" id="ci" min="10" max="80" value="${Math.round(parseFloat(cs.getPropertyValue("--glass-alpha")) * 100)}"></label>
-        <label class="row">Blur <input type="range" id="bl" min="0" max="30" value="${parseInt(cs.getPropertyValue("--blur")) || 14}"></label>
+        <label class="row">Glass clarity <small>Crystal clear</small><input type="range" id="bl" min="0" max="100" value="${(() => { try { return localStorage.getItem("frutiger-clarity") ?? 43; } catch (e) { return 43; } })()}"><small>Frosted</small></label>
         <h3>App icons</h3>${[["gloss", "Glossy (Frutiger)", "Every app icon inside a glass bubble"], ["papirus", "Consistent set (Papirus)", "One matching flat style"], ["app", "App-provided icons", "Each app's own icon"]].map(([k, n, d]) => `<label class="radio"><input type="radio" name="ic" value="${k}" ${iconStyle === k ? "checked" : ""}> ${n} <small>${d}</small></label>`).join("")}`;
       if (tab === "taskbar") h += `<h3>Taskbar style</h3><select id="tb" style="font:inherit;padding:4px 6px;width:100%">${BAR_MODES.map(m => `<option value="${m}" ${document.body.classList.contains(m) ? "selected" : ""}>${STYLE_NAMES[m]}</option>`).join("")}</select>
         <p class="hint">Changes right away. In the real OS: Personalize → Taskbar, or <code>frutiger-taskbar &lt;style&gt;</code>.</p>`;
@@ -899,6 +981,7 @@ const APPS = {
         <h3>Wallpaper effects</h3>${tg("live_effects", "Live effects", "Bubbles rise and the light rays turn")}${tg("weather_effects", "Weather effects", "Rain or snow on the desktop. The OS uses your city's weather; here you can simulate it:")}
         <div class="todrow">${["rain", "snow", "clear"].map(k => `<button class="btn${DS.weather_sim === k ? " primary" : ""}" data-wx="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join("")}</div>
         <h3>Desktop gadgets</h3>${tg("gadgets", "Show gadgets on the desktop")}<div class="subs">${tg("gadget_clock", "Clock")}${tg("gadget_weather", "Weather")}${tg("gadget_cpu", "CPU and memory meter")}${tg("gadget_notes", "Sticky note")}${tg("gadget_slideshow", "Photo slideshow")}</div>
+        <h3>Glass</h3>${tg("glass_edges", "Edge lighting", "Window rims catch the light, with a faint rainbow fringe; the light shifts as you move windows")}${tg("glass_refract", "Refraction", "The wallpaper bends slightly through the edges of the glass")}${tg("glass_reflect", "Reflections in the glass", "A soft sky and clouds in the glass that slide as you move a window")}${tg("glass_cast", "Glass casts light", "Windows throw a faint tinted glow onto the wallpaper behind them")}${tg("glass_hottrack", "Taskbar glow", "A glow in the app's own colour follows the pointer across its taskbar button")}${tg("glass_apptint", "Tint each window to its app", "Each window's glass takes its app's colour")}${tg("glass_menus", "Glass menus and tooltips", "Right-click menus, dropdowns and tooltips become frosted glass")}${tg("glass_frost", "Frost when it snows", "Frost creeps in from the corners of the glass (with weather effects)")}${tg("glass_bloom", "Glass bloom", "Windows open out of a soft glow and dissolve into light when they close")}
         <h3>Aero touches</h3>${tg("aero_shine", "Title-bar shine", "Light sweeps across a window's glass when you switch to it")}${tg("aero_peek", "Aero Peek", "Point at a taskbar button for a live preview; point at the bottom-right corner to see through all windows")}${tg("aero_caustics", "Light on the water", "Shimmering light on lakes, ponds and the aquarium")}${tg("aero_wildlife", "Wildlife", "Now and then a butterfly, dragonfly or leaf drifts by; fireflies at night")}${tg("aero_ripples", "Desktop ripples", "Click empty desktop to send out a water ripple")}${tg("aero_ambient", "Ambient sounds", "Soft water and the odd bird in the background")}
         <h3>Sounds, screensaver and effects</h3>${tg("sounds", "Frutiger sounds", "Startup chime, water drops, bubble pops")}${tg("click_sounds", "Glassy click sounds")}${tg("screensaver", "Bubbles screensaver", `After ${DS.screensaver_minutes} minute${DS.screensaver_minutes > 1 ? "s" : ""} idle`)}${tg("window_effects", "Window effects", "Windows shrink into bubbles and burst when closed")}
         <div class="todrow"><button class="btn" id="psaver">Preview screensaver</button><button class="btn" id="pwelcome">Open the Welcome Center</button></div>`;
@@ -907,7 +990,7 @@ const APPS = {
       body.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { tab = b.dataset.tab; draw(); });
       body.querySelectorAll(".sw").forEach(s => s.onclick = () => { window.__aero && __aero.manualAccent(); R.setProperty("--accent", s.dataset.c); save(); draw(); });
       const ci = body.querySelector("#ci"); if (ci) ci.oninput = e => { R.setProperty("--glass-alpha", e.target.value / 100); save(); };
-      const bl = body.querySelector("#bl"); if (bl) bl.oninput = e => R.setProperty("--blur", e.target.value + "px");
+      const bl = body.querySelector("#bl"); if (bl) bl.oninput = e => window.__glass && __glass.clarity(e.target.value);
       body.querySelectorAll('input[name="ic"]').forEach(r => r.onchange = () => setIcons(r.value));
       const tb = body.querySelector("#tb"); if (tb) tb.onchange = e => setBar(e.target.value);
       body.querySelectorAll(".tg input").forEach(c => c.onchange = () => { setDS(c.dataset.k, c.checked); if (c.dataset.k === "weather_effects" && c.checked) notify("Weather", DS.weather_sim === "clear" ? "Clear skies in Lagoon City" : `It's ${DS.weather_sim === "rain" ? "raining" : "snowing"} in Lagoon City`); });
@@ -969,7 +1052,7 @@ function open(id, ...args) {
 function close(w) {
   w.classList.add("closing"); const t = w._task;
   if (document.body.classList.contains("dock")) { t.classList.add("popping"); setTimeout(() => t.remove(), 320); } else t.remove();
-  setTimeout(() => { w.remove(); syncPins(); }, 150);
+  setTimeout(() => { w.remove(); syncPins(); }, document.body.classList.contains("g-bloom") ? 230 : 150);
 }
 /* ---------- Bubble Dock pins ---------- */
 const PINS = ["files","web","term","settings"];
@@ -1618,7 +1701,8 @@ const EMBED = {"walls": {"aquarium": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQA
 const DESK_DEFAULTS = { wallpaper_mode: "timeofday", wallpaper: "lagoon-day", wallpaper_fit: "fill", slideshow_source: "pack", slideshow_minutes: 1, tod_override: "", live_effects: true,
   weather_effects: false, weather_sim: "rain", gadgets: true, gadget_clock: true, gadget_weather: true, gadget_cpu: true, gadget_notes: false,
   gadget_slideshow: false, sounds: true, click_sounds: false, screensaver: true, screensaver_minutes: 2, window_effects: true, calm_mode: false,
-  aero_shine: true, aero_peek: true, aero_caustics: true, aero_wildlife: true, aero_ripples: true, aero_ambient: false, glass_match: false };
+  aero_shine: true, aero_peek: true, aero_caustics: true, aero_wildlife: true, aero_ripples: true, aero_ambient: false, glass_match: false,
+  glass_edges: true, glass_refract: true, glass_reflect: true, glass_cast: true, glass_hottrack: true, glass_apptint: false, glass_menus: true, glass_frost: true, glass_bloom: true };
 const DS = Object.assign({}, DESK_DEFAULTS);
 try { Object.assign(DS, JSON.parse(localStorage.getItem("frutiger-desktop") || "{}")); } catch (e) {}
 const dsSave = () => { try { localStorage.setItem("frutiger-desktop", JSON.stringify(DS)); } catch (e) {} };
@@ -1824,7 +1908,7 @@ document.addEventListener("keyup", e => { if (e.key === "Alt" && atSel >= 0) { c
   input[type=text],input:not([type]),textarea,.term{cursor:${u("text")},text} .titlebar{cursor:${u("default")},default}}`; document.head.appendChild(st); })();
 
 function applyDesktop(force) { applyWall(force); applyEffects(); applyGadgets(); }
-function setDS(k, v) { DS[k] = v; dsSave(); setTimeout(() => window.__aero && __aero.apply(k)); applyDesktop(k === "wallpaper" || k === "wallpaper_mode" || k === "tod_override" || k === "calm_mode" || k === "wallpaper_fit" || k === "slideshow_source"); }
+function setDS(k, v) { DS[k] = v; dsSave(); setTimeout(() => { window.__aero && __aero.apply(k); window.__glass && __glass.apply(); }); applyDesktop(k === "wallpaper" || k === "wallpaper_mode" || k === "tod_override" || k === "calm_mode" || k === "wallpaper_fit" || k === "slideshow_source"); }
 
 // ---- after login: chime, Welcome Center (first time), a balloon
 $("#loginf").addEventListener("submit", () => {
@@ -2200,6 +2284,109 @@ window.__aero = (() => {
   return A;
 })();
 __aero.apply(); __aero.wall(wallName); __aero.gadgets();
+
+
+// ================= More glass: edge lighting, refraction, reflections, cast light, taskbar glow,
+// app-tinted glass, glass menus/tooltips, clarity, frost and bloom
+window.__glass = (() => {
+  const G = {}, R = document.documentElement.style, desk = $("#desktop");
+  const LIGHT = () => [-innerWidth * .15, -innerHeight * .35];       // light source: above the top-left of the screen
+  // frost texture (white crystals) made once from SVG noise
+  R.setProperty("--frost-tex", `url("data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><filter id="f"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="3" seed="4"/><feColorMatrix values="0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 3 -1.55"/></filter><rect width="180" height="180" filter="url(#f)"/></svg>')}")`);
+
+  // ---- an app's own colour, sampled from its icon (cached)
+  const appCol = {};
+  function appColor(id) {
+    if (appCol[id]) return appCol[id];
+    const a = APPS[id]; if (!a) return null;
+    const im = iconImage(a.icon); if (!im.complete || !im.naturalWidth) return null;
+    const c = document.createElement("canvas"); c.width = c.height = 24; const x = c.getContext("2d"); x.drawImage(im, 0, 0, 24, 24);
+    const d = x.getImageData(0, 0, 24, 24).data; let r = 0, g = 0, b = 0, w = 0;
+    for (let i = 0; i < d.length; i += 4) { if (d[i + 3] < 128) continue; const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]), s = mx ? (mx - mn) / mx : 0, k = .03 + s * s;
+      r += d[i] * k; g += d[i + 1] * k; b += d[i + 2] * k; w += k; }
+    if (!w) return null;
+    return appCol[id] = `rgb(${Math.round(r / w)},${Math.round(g / w)},${Math.round(b / w)})`;
+  }
+
+  // load every app icon up front so its colour is ready for the glow and the tint
+  Object.keys(APPS).forEach(id => { const im = iconImage(APPS[id].icon); if (im.complete) appColor(id); else im.addEventListener("load", () => appColor(id), { once: true }); });
+  // ---- per-window layers
+  const cast = document.createElement("div"); cast.id = "castlayer"; desk.insertBefore(cast, W);
+  function layers(w) {
+    if (w._gfx) return w._gfx;
+    const g = document.createElement("div"); g.className = "gfx"; g.innerHTML = '<i class="refr"></i><i class="refl"></i><i class="frost"></i>';
+    const e = document.createElement("div"); e.className = "gedge";
+    w.prepend(g); w.appendChild(e);
+    const tb = w.querySelector(".titlebar"); if (tb) w.style.setProperty("--tbh", tb.offsetHeight + "px");
+    const c = document.createElement("i"); cast.appendChild(c);
+    return w._gfx = { g, e, refr: g.querySelector(".refr"), refl: g.querySelector(".refl"), cast: c };
+  }
+  const wallSrc = () => { try { return wallURL(wallName); } catch (e) { return null; } };
+  let lastWall = null, frame = 0, frostR = 0, frostA = 0, lastT = performance.now();
+  function tick(now) {
+    const dt = Math.min(.1, (now - lastT) / 1000); lastT = now;
+    const wins = [...W.querySelectorAll(".win")];
+    const [Lx, Ly] = LIGHT(), vw = innerWidth, vh = innerHeight;
+    const src = wallSrc(), cw = Math.max(vw, vh * 16 / 9), ch = cw * 9 / 16, ox = (vw - cw) / 2, oy = (vh - ch) / 2, m = 1.14;
+    // frost grows while it snows and melts away after
+    const snowing = DS.glass_frost && dsOn("weather_effects") && DS.weather_sim === "snow";
+    frostR = Math.max(0, Math.min(130, frostR + (snowing ? 5 : -30) * dt * (DS.calm_mode ? 20 : 1)));
+    frostA += ((snowing || frostR > 1 ? .9 : 0) - frostA) * Math.min(1, dt * 2);
+    R.setProperty("--frost-r", frostR.toFixed(1) + "px"); R.setProperty("--frost-a", frostA.toFixed(3));
+    const live = new Set();
+    wins.forEach(w => {
+      if (w.closest(".pthumb")) return;
+      const L = layers(w); live.add(L.cast);
+      const r = w.getBoundingClientRect(), shown = !w.classList.contains("min") && r.width > 0;
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2, dx = cx - Lx, dy = cy - Ly;
+      // edge light points away from the light source
+      w.style.setProperty("--la", (Math.atan2(dx, -dy) * 180 / Math.PI).toFixed(1) + "deg");
+      // refraction: the wallpaper magnified slightly around the window's centre
+      if (document.body.classList.contains("g-refract") && src) {
+        if (L.src !== src) { L.refr.style.backgroundImage = `url(${src})`; L.src = src; }
+        const Ox = cx + (ox - cx) * m, Oy = cy + (oy - cy) * m;
+        L.refr.style.backgroundSize = `${cw * m}px ${ch * m}px`; L.refr.style.backgroundPosition = `${Ox - r.left}px ${Oy - r.top}px`;
+      }
+      // reflections slide slower than the window (parallax)
+      L.refl.style.backgroundPosition = `${-r.left * .35}px ${-r.top * .35}px`;
+      // cast light: thrown away from the light source, behind the window
+      if (document.body.classList.contains("g-cast") && shown && !w.classList.contains("max") && !w.classList.contains("closing")) {
+        const k = Math.min(1, 900 / Math.hypot(dx, dy)), off = 26 + 20 * k, ang = Math.atan2(dy, dx);
+        const tx = r.left + Math.cos(ang) * off, ty = r.top + Math.sin(ang) * off;
+        Object.assign(L.cast.style, { display: "block", left: tx + "px", top: ty + "px", width: r.width + "px", height: r.height + "px" });
+        L.cast.style.setProperty("--c", DS.glass_apptint ? (appColor(w.dataset.app) || "var(--accent)") : "var(--accent)");
+      } else L.cast.style.display = "none";
+      // app-tinted glass
+      if (DS.glass_apptint) { const c = appColor(w.dataset.app); if (c && w._tint !== c) { w.style.setProperty("--accent", c); w._tint = c; } }
+      else if (w._tint) { w.style.removeProperty("--accent"); w._tint = null; }
+    });
+    [...cast.children].forEach(c => { if (!live.has(c)) c.remove(); });
+    raf = requestAnimationFrame(tick);
+  }
+  let raf = requestAnimationFrame(tick);
+
+  // ---- taskbar hot-track glow
+  $("#taskbar").addEventListener("pointermove", e => {
+    const t = e.target.closest(".task"); if (!t) return; const r = t.getBoundingClientRect();
+    t.style.setProperty("--hx", (e.clientX - r.left) + "px");
+    const w = t._win || [...W.querySelectorAll(".win")].find(x => x._task === t), c = w && appColor(w.dataset.app);
+    if (c) t.style.setProperty("--hc", c);
+  });
+
+  // ---- glass clarity: one slider from crystal clear to frosted (blur + haze)
+  G.clarity = v => { v = Math.max(0, Math.min(100, +v)); R.setProperty("--blur", (2 + v * .28).toFixed(1) + "px"); R.setProperty("--haze", (v * .0024).toFixed(3));
+    try { localStorage.setItem("frutiger-clarity", v); } catch (e) {} };
+  try { const v = localStorage.getItem("frutiger-clarity"); if (v !== null) G.clarity(v); } catch (e) {}
+
+  G.apply = () => {
+    const b = document.body.classList;
+    b.toggle("g-edges", !!DS.glass_edges); b.toggle("g-refract", !!DS.glass_refract); b.toggle("g-reflect", !!DS.glass_reflect);
+    b.toggle("g-cast", !!DS.glass_cast); b.toggle("g-hot", !!DS.glass_hottrack); b.toggle("g-menus", !!DS.glass_menus);
+    b.toggle("g-bloom", !!DS.glass_bloom && dsOn("window_effects"));
+  };
+  G.apply();
+  return G;
+})();
 
 (function grubMenu() {
   const g = $("#grub"), items = [...g.querySelectorAll(".it")], bar = $("#gbar i");
